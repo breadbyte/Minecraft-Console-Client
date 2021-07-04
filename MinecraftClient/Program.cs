@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using MinecraftClient.Protocol;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Threading;
 using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Protocol.Session;
@@ -26,7 +25,8 @@ namespace MinecraftClient
     ///  - Mark new version as handled (see ProtocolHandler.cs)
     ///  - Update MCHighestVersion field below (for versionning)
     /// </remarks>
-    static class Program {
+    static class Program
+    {
         private static McClient client;
         public static string[] startupargs;
 
@@ -41,40 +41,38 @@ namespace MinecraftClient
         /// <summary>
         /// The main entry point of Minecraft Console Client
         /// </summary>
-        static void Main(string[] args) {
+        static void Main(string[] args)
+        {
             Console.WriteLine("Console Client for MC {0} to {1} - v{2} - By ORelio & Contributors", MCLowestVersion, MCHighestVersion, Version);
 
             //Build information to facilitate processing of bug reports
-            if (BuildInfo != null) {
+            if (BuildInfo != null)
+            {
                 ConsoleIO.WriteLineFormatted("§8" + BuildInfo);
             }
 
             //Debug input ?
-            if (args.Length == 1 && args[0] == "--keyboard-debug") {
+            if (args.Length == 1 && args[0] == "--keyboard-debug")
+            {
                 ConsoleIO.WriteLine("Keyboard debug mode: Press any key to display info");
                 ConsoleIO.DebugReadInput();
             }
 
             //Setup ConsoleIO
             ConsoleIO.LogPrefix = "§8[MCC] ";
-            if (args.Length >= 1 && args[args.Length - 1] == "BasicIO" ||
-                args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor") {
-                if (args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor") {
+            if (args.Length >= 1 && args[args.Length - 1] == "BasicIO" || args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor")
+            {
+                if (args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor")
+                {
                     ConsoleIO.BasicIO_NoColor = true;
                 }
-
                 ConsoleIO.BasicIO = true;
                 args = args.Where(o => !Object.ReferenceEquals(o, args[args.Length - 1])).ToArray();
             }
 
             //Take advantage of Windows 10 / Mac / Linux UTF-8 console
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (isUsingMono || WindowsVersion.WinMajorVersion >= 10)
             {
-                if (!RuntimeInformation.OSDescription.Contains("Windows 7")) {
-                    Console.OutputEncoding = Console.InputEncoding = Encoding.UTF8;
-                }
-            }
-            else {
                 Console.OutputEncoding = Console.InputEncoding = Encoding.UTF8;
             }
 
