@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Sentry;
 
 namespace MinecraftClient.Protocol
 {
@@ -112,8 +113,9 @@ namespace MinecraftClient.Protocol
                     System.IO.File.WriteAllText(Language_File, stringBuilder.ToString());
                     ConsoleIO.WriteLineFormatted(Translations.Get("chat.done", Language_File));
                 }
-                catch
+                catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     Translations.WriteLineFormatted("chat.fail");
                 }
             }

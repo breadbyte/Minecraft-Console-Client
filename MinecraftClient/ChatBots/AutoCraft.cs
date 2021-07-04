@@ -5,6 +5,7 @@ using System.Text;
 using System.IO;
 using MinecraftClient.Inventory;
 using MinecraftClient.Mapping;
+using Sentry;
 
 namespace MinecraftClient.ChatBots
 {
@@ -269,6 +270,7 @@ namespace MinecraftClient.ChatBots
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 LogToConsoleTranslated("bot.autoCraft.error.config", "\n" + e.Message);
             }
         }

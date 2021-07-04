@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
+using Sentry;
 
 namespace MinecraftClient.Logger
 {
@@ -48,6 +49,7 @@ namespace MinecraftClient.Logger
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 // Must use base since we already failed to write log
                 base.Error("Cannot write to log file: " + e.Message);
                 base.Debug("Stack trace: \n" + e.StackTrace);

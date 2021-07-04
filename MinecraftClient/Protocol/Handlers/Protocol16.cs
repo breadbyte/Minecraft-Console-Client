@@ -9,6 +9,7 @@ using MinecraftClient.Proxy;
 using System.Security.Cryptography;
 using MinecraftClient.Mapping;
 using MinecraftClient.Inventory;
+using Sentry;
 
 namespace MinecraftClient.Protocol.Handlers
 {
@@ -70,9 +71,9 @@ namespace MinecraftClient.Protocol.Handlers
                     } while (Update());
                 }
             }
-            catch (System.IO.IOException) { }
-            catch (SocketException) { }
-            catch (ObjectDisposedException) { }
+            catch (System.IO.IOException e) { SentrySdk.CaptureException(e); }
+            catch (SocketException e) { SentrySdk.CaptureException(e); }
+            catch (ObjectDisposedException e) { SentrySdk.CaptureException(e); }
 
             handler.OnConnectionLost(ChatBot.DisconnectReason.ConnectionLost, "");
         }
@@ -219,7 +220,7 @@ namespace MinecraftClient.Protocol.Handlers
                     c.Close();
                 }
             }
-            catch { }
+            catch (Exception e) { SentrySdk.CaptureException(e); }
         }
 
         private void readData(int offset)
@@ -231,7 +232,7 @@ namespace MinecraftClient.Protocol.Handlers
                     byte[] cache = new byte[offset];
                     Receive(cache, 0, offset, SocketFlags.None);
                 }
-                catch (OutOfMemoryException) { }
+                catch (OutOfMemoryException e) { SentrySdk.CaptureException(e); }
             }
         }
 
@@ -578,13 +579,15 @@ namespace MinecraftClient.Protocol.Handlers
                     }
                     catch (Exception e)
                     {
+                        SentrySdk.CaptureException(e);
                         //Connection failed
                         ConsoleIO.WriteLineFormatted("§8" + e.GetType().Name + ": " + e.Message);
                         return false;
                     }
                 }
-                catch
+                catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     handler.OnConnectionLost(ChatBot.DisconnectReason.ConnectionLost, "");
                     return false;
                 }
@@ -616,8 +619,8 @@ namespace MinecraftClient.Protocol.Handlers
 
                 Send(reason);
             }
-            catch (SocketException) { }
-            catch (System.IO.IOException) { }
+            catch (SocketException e) { SentrySdk.CaptureException(e); }
+            catch (System.IO.IOException e) { SentrySdk.CaptureException(e); }
         }
 
         public int GetMaxChatMessageLength()

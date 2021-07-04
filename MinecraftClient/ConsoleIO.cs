@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Sentry;
 
 namespace MinecraftClient
 {
@@ -284,8 +285,8 @@ namespace MinecraftClient
                                 for (int i = 0; i < buffer2.Length; i++) { GoBack(); }
                             }
                         }
-                        catch (ArgumentOutOfRangeException)
-                        {
+                        catch (ArgumentOutOfRangeException a) {
+                            SentrySdk.CaptureException(a);
                             //Console resized: Try again
                             Console.Write('\n');
                             Write(text);

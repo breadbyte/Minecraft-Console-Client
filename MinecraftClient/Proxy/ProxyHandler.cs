@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Net.Sockets;
+using Sentry;
 using Starksoft.Net.Proxy;
 
 namespace MinecraftClient.Proxy
@@ -62,6 +63,7 @@ namespace MinecraftClient.Proxy
             }
             catch (ProxyException e)
             {
+                SentrySdk.CaptureException(e);
                 ConsoleIO.WriteLineFormatted("§8" + e.Message);
                 proxy = null;
                 throw new SocketException((int)SocketError.HostUnreachable);

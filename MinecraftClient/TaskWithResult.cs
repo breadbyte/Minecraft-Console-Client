@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Sentry;
 
 namespace MinecraftClient
 {
@@ -87,6 +88,7 @@ namespace MinecraftClient
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 exception = e;
             }
 

@@ -9,6 +9,7 @@ using Ionic.Zip;
 using MinecraftClient.Mapping;
 using Org.BouncyCastle.Crypto.Utilities;
 using MinecraftClient.Protocol.Handlers.PacketPalettes;
+using Sentry;
 
 namespace MinecraftClient.Protocol
 {
@@ -227,6 +228,7 @@ namespace MinecraftClient.Protocol
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 WriteDebugLog("Exception while adding packet: " + e.Message + "\n" + e.StackTrace);
             }
         }

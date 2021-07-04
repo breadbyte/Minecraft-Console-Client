@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using MinecraftClient.Mapping;
+using Sentry;
 
 namespace MinecraftClient.Commands
 {
@@ -45,7 +46,7 @@ namespace MinecraftClient.Commands
                         handler.UpdateLocation(handler.GetCurrentLocation(), yaw, pitch);
                         return Translations.Get("cmd.look.at", yaw.ToString("0.00"), pitch.ToString("0.00"));
                     }
-                    catch (FormatException) { return GetCmdDescTranslated(); }
+                    catch (FormatException f) { SentrySdk.CaptureException(f); return GetCmdDescTranslated(); }
                 }
                 else if (args.Length == 3)
                 {
@@ -60,7 +61,7 @@ namespace MinecraftClient.Commands
 
                         return Translations.Get("cmd.look.block", block);
                     }
-                    catch (FormatException) { return CmdUsage; }
+                    catch (FormatException f) { SentrySdk.CaptureException(f); return CmdUsage; }
                     
                 }
                 else return GetCmdDescTranslated();

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Sentry;
 
 namespace MinecraftClient.Mapping
 {
@@ -46,8 +47,9 @@ namespace MinecraftClient.Mapping
             {
                 return this[location.ChunkY];
             }
-            catch (IndexOutOfRangeException)
+            catch (IndexOutOfRangeException i)
             {
+                SentrySdk.CaptureException(i);
                 return null;
             }
         }

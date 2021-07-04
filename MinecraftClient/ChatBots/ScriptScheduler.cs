@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Globalization;
+using Sentry;
 
 namespace MinecraftClient.ChatBots
 {
@@ -74,7 +75,7 @@ namespace MinecraftClient.ChatBots
                                     case "triggeronlogin": current_task.triggerOnLogin = Settings.str2bool(argValue); break;
                                     case "triggerontime": current_task.triggerOnTime = Settings.str2bool(argValue); break;
                                     case "triggeroninterval": current_task.triggerOnInterval = Settings.str2bool(argValue); break;
-                                    case "timevalue": try { current_task.triggerOnTime_Times.Add(DateTime.ParseExact(argValue, "HH:mm", CultureInfo.InvariantCulture)); } catch { } break;
+                                    case "timevalue": try { current_task.triggerOnTime_Times.Add(DateTime.ParseExact(argValue, "HH:mm", CultureInfo.InvariantCulture)); } catch (Exception e) { SentrySdk.CaptureException(e); } break;
                                     case "timeinterval": int interval = 1; int.TryParse(argValue, out interval); current_task.triggerOnInterval_Interval = interval; break;
                                     case "script": current_task.action = "script " + argValue; break; //backward compatibility with older tasks.ini
                                     case "action": current_task.action = argValue; break;

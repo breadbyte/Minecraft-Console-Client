@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using MinecraftClient.Inventory;
 using MinecraftClient.Mapping;
+using Sentry;
 
 namespace MinecraftClient.Commands
 {
@@ -129,7 +130,7 @@ namespace MinecraftClient.Commands
                             return actioncount + " " + Translations.Get(actionst);
                         }
                     }
-                    catch (FormatException) { return GetCmdDescTranslated(); }
+                    catch (FormatException f) { SentrySdk.CaptureException(f); return GetCmdDescTranslated(); }
                 }
                 else
                 {

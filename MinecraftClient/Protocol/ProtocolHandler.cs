@@ -10,6 +10,7 @@ using MinecraftClient.Proxy;
 using MinecraftClient.Protocol.Handlers;
 using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Protocol.Session;
+using Sentry;
 
 namespace MinecraftClient.Protocol
 {
@@ -61,6 +62,7 @@ namespace MinecraftClient.Protocol
                     }
                     catch (Exception e)
                     {
+                        SentrySdk.CaptureException(e);
                         ConsoleIO.WriteLineFormatted(Translations.Get("mcc.not_found", domainVal, e.GetType().FullName, e.Message));
                     }
                 }, TimeSpan.FromSeconds(Settings.ResolveSrvRecordsShortTimeout ? 10 : 30));
@@ -96,6 +98,7 @@ namespace MinecraftClient.Protocol
                 }
                 catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     ConsoleIO.WriteLineFormatted(String.Format("§8{0}: {1}", e.GetType().FullName, e.Message));
                 }
             }, TimeSpan.FromSeconds(Settings.ResolveSrvRecordsShortTimeout ? 10 : 30)))
@@ -259,8 +262,9 @@ namespace MinecraftClient.Protocol
                 {
                     return Int32.Parse(MCVersion);
                 }
-                catch
+                catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     return 0;
                 }
             }
@@ -418,6 +422,7 @@ namespace MinecraftClient.Protocol
             }
             catch (System.Security.Authentication.AuthenticationException e)
             {
+                SentrySdk.CaptureException(e);
                 if (Settings.DebugMessages)
                 {
                     ConsoleIO.WriteLineFormatted("§8" + e.ToString());
@@ -426,6 +431,7 @@ namespace MinecraftClient.Protocol
             }
             catch (System.IO.IOException e)
             {
+                SentrySdk.CaptureException(e);
                 if (Settings.DebugMessages)
                 {
                     ConsoleIO.WriteLineFormatted("§8" + e.ToString());
@@ -438,6 +444,7 @@ namespace MinecraftClient.Protocol
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 if (Settings.DebugMessages)
                 {
                     ConsoleIO.WriteLineFormatted("§8" + e.ToString());
@@ -464,6 +471,7 @@ namespace MinecraftClient.Protocol
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
                 if (Settings.DebugMessages)
@@ -530,6 +538,7 @@ namespace MinecraftClient.Protocol
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
                 if (Settings.DebugMessages)
@@ -568,6 +577,7 @@ namespace MinecraftClient.Protocol
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
                 if (Settings.DebugMessages)
                 {
@@ -602,8 +612,9 @@ namespace MinecraftClient.Protocol
                     return LoginResult.OtherError;
                 }
             }
-            catch
+            catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 return LoginResult.OtherError;
             }
         }
@@ -654,8 +665,9 @@ namespace MinecraftClient.Protocol
                     return LoginResult.OtherError;
                 }
             }
-            catch
+            catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 return LoginResult.OtherError;
             }
         }
@@ -676,7 +688,7 @@ namespace MinecraftClient.Protocol
                 int code = DoHTTPSPost("sessionserver.mojang.com", "/session/minecraft/join", json_request, ref result);
                 return (code >= 200 && code < 300);
             }
-            catch { return false; }
+            catch (Exception e) { SentrySdk.CaptureException(e); return false; }
         }
 
         /// <summary>
@@ -853,6 +865,7 @@ namespace MinecraftClient.Protocol
                 }
                 catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     if (!(e is System.Threading.ThreadAbortException))
                     {
                         exception = e;

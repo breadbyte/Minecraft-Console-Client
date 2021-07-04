@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using MinecraftClient.Mapping;
+using Sentry;
 
 namespace MinecraftClient.Commands
 {
@@ -36,7 +37,7 @@ namespace MinecraftClient.Commands
                             return Translations.Get("cmd.dig.dig", x, y, z);
                         else return "cmd.dig.fail";
                     }
-                    catch (FormatException) { return GetCmdDescTranslated(); }
+                    catch (FormatException f) {SentrySdk.CaptureException(f); return GetCmdDescTranslated(); }
                 }
                 else return GetCmdDescTranslated();
             }

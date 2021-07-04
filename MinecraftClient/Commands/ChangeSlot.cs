@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Sentry;
 
 namespace MinecraftClient.Commands
 {
@@ -23,8 +24,9 @@ namespace MinecraftClient.Commands
                 {
                     slot = Convert.ToInt16(getArg(command));
                 }
-                catch (FormatException)
+                catch (FormatException f)
                 {
+                    SentrySdk.CaptureException(f);
                     return Translations.Get("cmd.changeSlot.nan");
                 }
                 if (slot >= 1 && slot <= 9)

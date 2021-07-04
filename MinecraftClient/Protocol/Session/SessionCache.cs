@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Timers;
+using Sentry;
 
 namespace MinecraftClient.Protocol.Session
 {
@@ -130,7 +131,7 @@ namespace MinecraftClient.Protocol.Session
                 {
                     mcSession = Json.ParseJson(File.ReadAllText(SessionCacheFileMinecraft));
                 }
-                catch (IOException) { /* Failed to read file from disk -- ignoring */ }
+                catch (IOException e) { SentrySdk.CaptureException(e); /* Failed to read file from disk -- ignoring */ }
                 if (mcSession.Type == Json.JSONData.DataType.Object
                     && mcSession.Properties.ContainsKey("clientToken")
                     && mcSession.Properties.ContainsKey("authenticationDatabase"))
@@ -161,7 +162,7 @@ namespace MinecraftClient.Protocol.Session
                                         ConsoleIO.WriteLineFormatted(Translations.Get("cache.loaded", login, session.ID));
                                     sessions[login] = session;
                                 }
-                                catch (InvalidDataException) { /* Not a valid session */ }
+                                catch (InvalidDataException e) { SentrySdk.CaptureException(e); /* Not a valid session */ }
                             }
                         }
                     }
@@ -189,10 +190,12 @@ namespace MinecraftClient.Protocol.Session
                 }
                 catch (IOException ex)
                 {
+                    SentrySdk.CaptureException(ex);
                     ConsoleIO.WriteLineFormatted(Translations.Get("cache.read_fail", ex.Message));
                 }
                 catch (SerializationException ex2)
                 {
+                    SentrySdk.CaptureException(ex2);
                     ConsoleIO.WriteLineFormatted(Translations.Get("cache.malformed", ex2.Message));
                 }
             }
@@ -222,6 +225,7 @@ namespace MinecraftClient.Protocol.Session
                                 }
                                 catch (InvalidDataException e)
                                 {
+                                    SentrySdk.CaptureException(e);
                                     if (Settings.DebugMessages)
                                         ConsoleIO.WriteLineFormatted(Translations.Get("cache.ignore_string", keyValue[1], e.Message));
                                 }
@@ -235,6 +239,7 @@ namespace MinecraftClient.Protocol.Session
                 }
                 catch (IOException e)
                 {
+                    SentrySdk.CaptureException(e);
                     ConsoleIO.WriteLineFormatted(Translations.Get("cache.read_fail_plain", e.Message));
                 }
             }
@@ -262,6 +267,7 @@ namespace MinecraftClient.Protocol.Session
             }
             catch (IOException e)
             {
+                SentrySdk.CaptureException(e);
                 ConsoleIO.WriteLineFormatted(Translations.Get("cache.save_fail", e.Message));
             }
         }

@@ -18,6 +18,7 @@ using MinecraftClient.Inventory.ItemPalettes;
 using MinecraftClient.Protocol.Handlers.PacketPalettes;
 using MinecraftClient.Logger;
 using System.Threading.Tasks;
+using Sentry;
 
 namespace MinecraftClient.Protocol.Handlers
 {
@@ -166,10 +167,11 @@ namespace MinecraftClient.Protocol.Handlers
                         Thread.Sleep(100 - elapsed);
                 }
             }
-            catch (System.IO.IOException) { }
-            catch (SocketException) { }
-            catch (ObjectDisposedException) { }
-            catch (OperationCanceledException) {
+            catch (System.IO.IOException e) { SentrySdk.CaptureException(e); }
+            catch (SocketException e) { SentrySdk.CaptureException(e); }
+            catch (ObjectDisposedException e) { SentrySdk.CaptureException(e); }
+            catch (OperationCanceledException e) {
+                SentrySdk.CaptureException(e);
                 Console.WriteLine("PROTOCOL18 CANCELLED");
             }
 
@@ -195,10 +197,10 @@ namespace MinecraftClient.Protocol.Handlers
                     HandlePacket(packetID, new Queue<byte>(packetData));
                 }
             }
-            catch (System.IO.IOException) { return false; }
-            catch (SocketException) { return false; }
-            catch (NullReferenceException) { return false; }
-            catch (Ionic.Zlib.ZlibException) { return false; }
+            catch (System.IO.IOException e) { SentrySdk.CaptureException(e); return false; }
+            catch (SocketException e) { SentrySdk.CaptureException(e); return false; }
+            catch (NullReferenceException e) { SentrySdk.CaptureException(e); return false; }
+            catch (Ionic.Zlib.ZlibException e) { SentrySdk.CaptureException(e); return false; }
             return true;
         }
 

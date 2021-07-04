@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using MinecraftClient.Mapping;
+using Sentry;
 
 namespace MinecraftClient.Commands
 {
@@ -62,7 +63,7 @@ namespace MinecraftClient.Commands
                             return Translations.Get("cmd.move.walk", goal);
                         return Translations.Get("cmd.move.fail", goal);
                     }
-                    catch (FormatException) { return GetCmdDescTranslated(); }
+                    catch (FormatException f) { SentrySdk.CaptureException(f); return GetCmdDescTranslated(); }
                 }
                 else return GetCmdDescTranslated();
             }

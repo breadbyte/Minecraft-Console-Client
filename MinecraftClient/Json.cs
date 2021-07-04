@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Sentry;
 
 namespace MinecraftClient
 {
@@ -127,8 +128,8 @@ namespace MinecraftClient
                                     }
                                     else cursorpos++; //Normal character escapement \"
                                 }
-                                catch (IndexOutOfRangeException) { cursorpos++; } // \u01<end of string>
-                                catch (ArgumentOutOfRangeException) { cursorpos++; } // Unicode index 0123 was invalid
+                                catch (IndexOutOfRangeException i) { SentrySdk.CaptureException(i); cursorpos++; } // \u01<end of string>
+                                catch (ArgumentOutOfRangeException a) { SentrySdk.CaptureException(a); cursorpos++; } // Unicode index 0123 was invalid
                             }
                             data.StringValue += toparse[cursorpos];
                             cursorpos++;
@@ -184,8 +185,9 @@ namespace MinecraftClient
                 SkipSpaces(toparse, ref cursorpos);
                 return data;
             }
-            catch (IndexOutOfRangeException)
+            catch (IndexOutOfRangeException i)
             {
+                SentrySdk.CaptureException(i);
                 return new JSONData(JSONData.DataType.String);
             }
         }

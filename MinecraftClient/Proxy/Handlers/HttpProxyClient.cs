@@ -29,6 +29,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Globalization;
 using System.ComponentModel;
+using Sentry;
 
 namespace Starksoft.Net.Proxy
 {
@@ -270,6 +271,7 @@ namespace Starksoft.Net.Proxy
             }
             catch (SocketException ex)
             {
+                SentrySdk.CaptureException(ex);
                 throw new ProxyException(String.Format(CultureInfo.InvariantCulture, "Connection to proxy host {0} on port {1} failed.", Utils.GetHost(_tcpClient), Utils.GetPort(_tcpClient)), ex);
             }
         }
@@ -509,6 +511,7 @@ namespace Starksoft.Net.Proxy
             }
             catch (Exception ex)
             {
+                SentrySdk.CaptureException(ex);
                 _asyncException = ex;
             }
         }

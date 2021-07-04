@@ -13,6 +13,7 @@ using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Mapping;
 using MinecraftClient.Inventory;
 using MinecraftClient.Logger;
+using Sentry;
 
 namespace MinecraftClient
 {
@@ -266,6 +267,7 @@ namespace MinecraftClient
                 }
                 catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     Log.Error(e.GetType().Name + ": " + e.Message);
                     Log.Error(Translations.Get("error.join"));
                     retry = true;
@@ -273,6 +275,7 @@ namespace MinecraftClient
             }
             catch (SocketException e)
             {
+                SentrySdk.CaptureException(e);
                 Log.Error(e.Message);
                 Log.Error(Translations.Get("error.connect"));
                 retry = true;
@@ -313,6 +316,7 @@ namespace MinecraftClient
                 }
                 catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     if (!(e is ThreadAbortException))
                     {
                         Log.Warn("Update: Got error from " + bot.ToString() + ": " + e.ToString());
@@ -495,6 +499,7 @@ namespace MinecraftClient
                 }
                 catch (Exception e)
                 {
+                    SentrySdk.CaptureException(e);
                     if (!(e is ThreadAbortException))
                     {
                         Log.Warn("OnDisconnect: Got error from " + bot.ToString() + ": " + e.ToString());
@@ -525,8 +530,8 @@ namespace MinecraftClient
                     InvokeOnMainThread(() => HandleCommandPromptText(text));
                 }
             }
-            catch (IOException) { }
-            catch (NullReferenceException) { }
+            catch (IOException i) { SentrySdk.CaptureException(i); }
+            catch (NullReferenceException n) { SentrySdk.CaptureException(n); }
         }
 
         /// <summary>
@@ -652,6 +657,7 @@ namespace MinecraftClient
                     }
                     catch (Exception e)
                     {
+                        SentrySdk.CaptureException(e);
                         if (!(e is ThreadAbortException))
                         {
                             Log.Warn(Translations.Get("icmd.error", bot.ToString(), e.ToString()));
@@ -690,6 +696,7 @@ namespace MinecraftClient
                         }
                         catch (Exception e)
                         {
+                            SentrySdk.CaptureException(e);
                             Log.Warn(e.Message);
                         }
                     }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using MinecraftClient.Inventory;
+using Sentry;
 
 namespace MinecraftClient.Commands
 {
@@ -169,7 +170,7 @@ namespace MinecraftClient.Commands
                                 return GetCmdDescTranslated();
                         }
                     }
-                    catch (FormatException) { return GetCmdDescTranslated(); }
+                    catch (FormatException f) { SentrySdk.CaptureException(f); return GetCmdDescTranslated(); }
                 }
                 else
                 {

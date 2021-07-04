@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+using Sentry;
 
 namespace MinecraftClient
 {
@@ -120,8 +121,9 @@ namespace MinecraftClient
                 {
                     return File.ReadAllLines(filePath, encoding);
                 }
-                catch (IOException)
+                catch (IOException i)
                 {
+                    SentrySdk.CaptureException(i);
                     attempt++;
                     if (attempt < maxTries)
                         Thread.Sleep(new Random().Next(50, 100) * attempt); // Back-off like CSMA/CD
@@ -149,8 +151,9 @@ namespace MinecraftClient
                     File.WriteAllLines(filePath, lines, encoding);
                     return;
                 }
-                catch (IOException)
+                catch (IOException i)
                 {
+                    SentrySdk.CaptureException(i);
                     attempt++;
                     if (attempt < maxTries)
                         Thread.Sleep(new Random().Next(50, 100) * attempt); // Back-off like CSMA/CD

@@ -7,6 +7,7 @@ using Microsoft.CSharp;
 using System.CodeDom.Compiler;
 using System.Reflection;
 using System.Diagnostics;
+using Sentry;
 
 namespace MinecraftClient.ChatBots
 {
@@ -112,14 +113,15 @@ namespace MinecraftClient.ChatBots
             if (Settings.DebugMessages)
             {
                 string caller = "Script";
-                try
-                {
+                try {
                     StackFrame frame = new StackFrame(1);
                     MethodBase method = frame.GetMethod();
                     Type type = method.DeclaringType;
                     caller = type.Name;
                 }
-                catch { }
+                catch (Exception e) {
+                    SentrySdk.CaptureException(e);
+                }
                 ConsoleIO.WriteLineFormatted(Translations.Get("bot.script.not_found", caller, filename));
             }
 
@@ -164,6 +166,7 @@ namespace MinecraftClient.ChatBots
                         }
                         catch (CSharpException e)
                         {
+                            SentrySdk.CaptureException(e);
                             string errorMessage = Translations.Get("bot.script.fail", file, e.ExceptionType);
                             LogToConsole(errorMessage);
                             if (owner != null)
@@ -201,11 +204,13 @@ namespace MinecraftClient.ChatBots
                                 {
                                     case "wait":
                                         int ticks = 10;
-                                        try
-                                        {
-                                            ticks = Convert.ToInt32(instruction_line.Substring(5, instruction_line.Length - 5));
+                                        try {
+                                            ticks = Convert.ToInt32(
+                                                instruction_line.Substring(5, instruction_line.Length - 5));
                                         }
-                                        catch { }
+                                        catch (Exception e) {
+                                            SentrySdk.CaptureException(e);
+                                        }
                                         sleepticks = ticks;
                                         break;
                                     default:

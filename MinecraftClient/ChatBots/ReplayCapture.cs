@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using MinecraftClient.Protocol;
+using Sentry;
 
 namespace MinecraftClient.ChatBots
 {
@@ -84,6 +85,7 @@ namespace MinecraftClient.ChatBots
             }
             catch (Exception e)
             {
+                SentrySdk.CaptureException(e);
                 return e.Message;
             }
         }

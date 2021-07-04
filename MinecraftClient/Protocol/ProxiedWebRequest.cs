@@ -7,6 +7,7 @@ using System.Collections.Specialized;
 using System.Net.Sockets;
 using MinecraftClient.Proxy;
 using System.Net.Security;
+using Sentry;
 
 namespace MinecraftClient.Protocol
 {
@@ -141,7 +142,7 @@ namespace MinecraftClient.Protocol
                     sr.Close();
                     stream.Close();
                     client.Close();
-                } catch { }
+                } catch (Exception e) { SentrySdk.CaptureException(e); }
             }, 
             TimeSpan.FromSeconds(30));
             return response;
