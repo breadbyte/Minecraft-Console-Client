@@ -92,10 +92,8 @@ namespace MinecraftClient.Protocol
         /// <param name="method">Method in string representation</param>
         /// <param name="body">Optional request body</param>
         /// <returns></returns>
-        private Response Send(string method, string body = "")
-        {
-            List<string> requestMessage = new List<string>()
-            {
+        private Response Send(string method, string body = "") {
+            List<string> requestMessage = new List<string>() {
                 string.Format("{0} {1} {2}", method.ToUpper(), path, httpVersion) // Request line
             };
             foreach (string key in Headers) // Headers
@@ -103,48 +101,48 @@ namespace MinecraftClient.Protocol
                 var value = Headers[key];
                 requestMessage.Add(string.Format("{0}: {1}", key, value));
             }
+
             requestMessage.Add(""); // <CR><LF>
-            if (body != "")
-            {
+            if (body != "") {
                 requestMessage.Add(body);
             }
             else requestMessage.Add(""); // <CR><LF>
-            if (Settings.DebugMessages)
-            {
-                foreach (string l in requestMessage)
-                {
+
+            if (Settings.DebugMessages) {
+                foreach (string l in requestMessage) {
                     ConsoleIO.WriteLine("< " + l);
                 }
             }
+
             Response response = Response.Empty();
-            AutoTimeout.Perform(() =>
-            {
-                TcpClient client = ProxyHandler.newTcpClient(host, port, true);
-                Stream stream;
-                if (isSecure)
-                {
-                    stream = new SslStream(client.GetStream());
-                    ((SslStream)stream).AuthenticateAsClient(host);
-                }
-                else
-                {
-                    stream = client.GetStream();
-                }
-                string h = string.Join("\r\n", requestMessage.ToArray());
-                byte[] data = Encoding.ASCII.GetBytes(h);
-                stream.Write(data, 0, data.Length);
-                stream.Flush();
-                StreamReader sr = new StreamReader(stream);
-                string rawResult = sr.ReadToEnd();
-                response = ParseResponse(rawResult);
-                try
-                {
-                    sr.Close();
-                    stream.Close();
-                    client.Close();
-                } catch (Exception e) { SentrySdk.CaptureException(e); }
-            }, 
-            TimeSpan.FromSeconds(30));
+
+            TcpClient client = ProxyHandler.newTcpClient(host, port, true);
+            client.ReceiveTimeout = 5000;
+            Stream stream;
+            if (isSecure) {
+                stream = new SslStream(client.GetStream());
+                ((SslStream) stream).AuthenticateAsClient(host);
+            }
+            else {
+                stream = client.GetStream();
+            }
+
+            string h = string.Join("\r\n", requestMessage.ToArray());
+            byte[] data = Encoding.ASCII.GetBytes(h);
+            stream.Write(data, 0, data.Length);
+            stream.Flush();
+            StreamReader sr = new StreamReader(stream);
+            string rawResult = sr.ReadToEnd();
+            response = ParseResponse(rawResult);
+            try {
+                sr.Close();
+                stream.Close();
+                client.Close();
+            }
+            catch (Exception e) {
+                SentrySdk.CaptureException(e);
+            }
+
             return response;
         }
 

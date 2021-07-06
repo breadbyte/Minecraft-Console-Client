@@ -127,59 +127,64 @@ namespace MinecraftClient.Mapping
         /// <param name="goal">Destination location</param>
         /// <param name="allowUnsafe">Allow possible but unsafe locations</param>
         /// <returns>A list of locations, or null if calculation failed</returns>
-        public static Queue<Location> CalculatePath(World world, Location start, Location goal, bool allowUnsafe = false)
-        {
+        public static Queue<Location> CalculatePath(World world, Location start, Location goal,
+            bool allowUnsafe = false) {
             Queue<Location> result = null;
+            
+            // todo timeout
+            HashSet<Location> ClosedSet = new HashSet<Location>(); // The set of locations already evaluated.
+            HashSet<Location>
+                OpenSet = new HashSet<Location>(new[]
+                    {start}); // The set of tentative nodes to be evaluated, initially containing the start node
+            Dictionary<Location, Location>
+                Came_From = new Dictionary<Location, Location>(); // The map of navigated nodes.
 
-            AutoTimeout.Perform(() =>
-            {
-                HashSet<Location> ClosedSet = new HashSet<Location>(); // The set of locations already evaluated.
-                HashSet<Location> OpenSet = new HashSet<Location>(new[] { start });  // The set of tentative nodes to be evaluated, initially containing the start node
-                Dictionary<Location, Location> Came_From = new Dictionary<Location, Location>(); // The map of navigated nodes.
+            Dictionary<Location, int> g_score = new Dictionary<Location, int>(); //:= map with default value of Infinity
+            g_score[start] = 0; // Cost from start along best known path.
+            // Estimated total cost from start to goal through y.
+            Dictionary<Location, int> f_score = new Dictionary<Location, int>(); //:= map with default value of Infinity
+            f_score[start] = (int) start.DistanceSquared(goal); //heuristic_cost_estimate(start, goal)
 
-                Dictionary<Location, int> g_score = new Dictionary<Location, int>(); //:= map with default value of Infinity
-                g_score[start] = 0; // Cost from start along best known path.
-                // Estimated total cost from start to goal through y.
-                Dictionary<Location, int> f_score = new Dictionary<Location, int>(); //:= map with default value of Infinity
-                f_score[start] = (int)start.DistanceSquared(goal); //heuristic_cost_estimate(start, goal)
-
-                while (OpenSet.Count > 0)
-                {
-                    Location current = //the node in OpenSet having the lowest f_score[] value
-                        OpenSet.Select(location => f_score.ContainsKey(location)
-                        ? new KeyValuePair<Location, int>(location, f_score[location])
-                        : new KeyValuePair<Location, int>(location, int.MaxValue))
-                        .OrderBy(pair => pair.Value).First().Key;
-                    if (current == goal)
-                    { //reconstruct_path(Came_From, goal)
-                        List<Location> total_path = new List<Location>(new[] { current });
-                        while (Came_From.ContainsKey(current))
-                        {
-                            current = Came_From[current];
-                            total_path.Add(current);
-                        }
-                        total_path.Reverse();
-                        result = new Queue<Location>(total_path);
+            while (OpenSet.Count > 0) {
+                Location current = //the node in OpenSet having the lowest f_score[] value
+                    OpenSet.Select(location => f_score.ContainsKey(location)
+                               ? new KeyValuePair<Location, int>(location, f_score[location])
+                               : new KeyValuePair<Location, int>(location, int.MaxValue))
+                           .OrderBy(pair => pair.Value).First().Key;
+                if (current == goal) {
+                    //reconstruct_path(Came_From, goal)
+                    List<Location> total_path = new List<Location>(new[] {current});
+                    while (Came_From.ContainsKey(current)) {
+                        current = Came_From[current];
+                        total_path.Add(current);
                     }
-                    OpenSet.Remove(current);
-                    ClosedSet.Add(current);
-                    foreach (Location neighbor in GetAvailableMoves(world, current, allowUnsafe))
-                    {
-                        if (ClosedSet.Contains(neighbor))
-                            continue;		// Ignore the neighbor which is already evaluated.
-                        int tentative_g_score = g_score[current] + (int)current.DistanceSquared(neighbor); //dist_between(current,neighbor) // length of this path.
-                        if (!OpenSet.Contains(neighbor))	// Discover a new node
-                            OpenSet.Add(neighbor);
-                        else if (tentative_g_score >= g_score[neighbor])
-                            continue;		// This is not a better path.
 
-                        // This path is the best until now. Record it!
-                        Came_From[neighbor] = current;
-                        g_score[neighbor] = tentative_g_score;
-                        f_score[neighbor] = g_score[neighbor] + (int)neighbor.DistanceSquared(goal); //heuristic_cost_estimate(neighbor, goal)
-                    }
+                    total_path.Reverse();
+                    result = new Queue<Location>(total_path);
                 }
-            }, TimeSpan.FromSeconds(5));
+
+                OpenSet.Remove(current);
+                ClosedSet.Add(current);
+                foreach (Location neighbor in GetAvailableMoves(world, current, allowUnsafe)) {
+                    if (ClosedSet.Contains(neighbor))
+                        continue; // Ignore the neighbor which is already evaluated.
+                    int tentative_g_score =
+                        g_score[current] +
+                        (int) current
+                            .DistanceSquared(neighbor); //dist_between(current,neighbor) // length of this path.
+                    if (!OpenSet.Contains(neighbor)) // Discover a new node
+                        OpenSet.Add(neighbor);
+                    else if (tentative_g_score >= g_score[neighbor])
+                        continue; // This is not a better path.
+
+                    // This path is the best until now. Record it!
+                    Came_From[neighbor] = current;
+                    g_score[neighbor] = tentative_g_score;
+                    f_score[neighbor] =
+                        g_score[neighbor] +
+                        (int) neighbor.DistanceSquared(goal); //heuristic_cost_estimate(neighbor, goal)
+                }
+            }
 
             return result;
         }

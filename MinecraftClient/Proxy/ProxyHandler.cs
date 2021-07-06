@@ -29,7 +29,7 @@ namespace MinecraftClient.Proxy
         /// <param name="port">Target port</param>
         /// <param name="login">True if the purpose is logging in to a Minecraft account</param>
 
-        public static TcpClient newTcpClient(string host, int port, bool login = false)
+        public static TcpClient? newTcpClient(string host, int port, bool login = false)
         {
             try
             {
@@ -53,13 +53,26 @@ namespace MinecraftClient.Proxy
 
                     if (!proxy_ok)
                     {
+                        // todo: we haven't actually verified we've connected, proxy still needs to connect at L58
                         ConsoleIO.WriteLineFormatted(Translations.Get("proxy.connected", Settings.ProxyHost, Settings.ProxyPort));
                         proxy_ok = true;
                     }
 
                     return proxy.CreateConnection(host, port);
                 }
-                else return new TcpClient(host, port);
+
+                try {
+                    return new TcpClient(host, port);
+                }
+                // todo handle gracefully
+                catch (SocketException e) {
+                    if (e.SocketErrorCode == SocketError.HostUnreachable)
+                        Translations.WriteLineFormatted("error.connection_timeout");
+                    if (e.SocketErrorCode == SocketError.HostNotFound)
+                        ConsoleIO.WriteLine("The IP Address does not exist. Are you sure you typed it correctly?"); //TODO Translation
+                }
+
+                return null;
             }
             catch (ProxyException e)
             {

@@ -30,46 +30,40 @@ namespace MinecraftClient.Protocol
         /// <param name="domain">Input domain name, updated with target host if any, else left untouched</param>
         /// <param name="port">Updated with target port if any, else left untouched</param>
         /// <returns>TRUE if a Minecraft Service was found.</returns>
-        public static bool MinecraftServiceLookup(ref string domain, ref ushort port)
-        {
+        public static bool MinecraftServiceLookup(ref string domain, ref ushort port) {
             bool foundService = false;
             string domainVal = domain;
             ushort portVal = port;
 
-            if (!String.IsNullOrEmpty(domain) && domain.Any(c => char.IsLetter(c)))
-            {
-                AutoTimeout.Perform(() =>
-                {
-                    try
-                    {
-                        Translations.WriteLine("mcc.resolve", domainVal);
-                        var lookupClient = new LookupClient();
-                        var response = lookupClient.Query(new DnsQuestion($"_minecraft._tcp.{domainVal}", QueryType.SRV));
-                        if (response.HasError != true && response.Answers.SrvRecords().Any())
-                        {
-                            //Order SRV records by priority and weight, then randomly
-                            var result = response.Answers.SrvRecords()
-                                .OrderBy(record => record.Priority)
-                                .ThenByDescending(record => record.Weight)
-                                .ThenBy(record => Guid.NewGuid())
-                                .First();
-                            string target = result.Target.Value.Trim('.');
-                            ConsoleIO.WriteLineFormatted(Translations.Get("mcc.found", target, result.Port, domainVal));
-                            domainVal = target;
-                            portVal = result.Port;
-                            foundService = true;
-                        }
+            if (!String.IsNullOrEmpty(domain) && domain.Any(c => char.IsLetter(c))) {
+
+                try {
+                    Translations.WriteLine("mcc.resolve", domainVal);
+                    var lookupClient = new LookupClient();
+                    var response = lookupClient.Query(new DnsQuestion($"_minecraft._tcp.{domainVal}", QueryType.SRV));
+                    if (response.HasError != true && response.Answers.SrvRecords().Any()) {
+                        //Order SRV records by priority and weight, then randomly
+                        var result = response.Answers.SrvRecords()
+                                             .OrderBy(record => record.Priority)
+                                             .ThenByDescending(record => record.Weight)
+                                             .ThenBy(record => Guid.NewGuid())
+                                             .First();
+                        string target = result.Target.Value.Trim('.');
+                        ConsoleIO.WriteLineFormatted(Translations.Get("mcc.found", target, result.Port, domainVal));
+                        domainVal = target;
+                        portVal = result.Port;
+                        foundService = true;
                     }
-                    catch (Exception e)
-                    {
-                        SentrySdk.CaptureException(e);
-                        ConsoleIO.WriteLineFormatted(Translations.Get("mcc.not_found", domainVal, e.GetType().FullName, e.Message));
-                    }
-                }, TimeSpan.FromSeconds(Settings.ResolveSrvRecordsShortTimeout ? 10 : 30));
+                }
+                catch (Exception e) {
+                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.not_found", domainVal, e.GetType().FullName, e.Message));
+                }
+                
+                domain = domainVal;
+                port = portVal;
+                return foundService;
             }
 
-            domain = domainVal;
-            port = portVal;
             return foundService;
         }
 
@@ -80,44 +74,34 @@ namespace MinecraftClient.Protocol
         /// <param name="serverPort">Server Port to ping</param>
         /// <param name="protocolversion">Will contain protocol version, if ping successful</param>
         /// <returns>TRUE if ping was successful</returns>
-        public static bool GetServerInfo(string serverIP, ushort serverPort, ref int protocolversion, ref ForgeInfo forgeInfo)
-        {
+        public static bool GetServerInfo(string serverIP, ushort serverPort, ref int protocolversion,
+            ref ForgeInfo forgeInfo) {
             bool success = false;
             int protocolversionTmp = 0;
             ForgeInfo forgeInfoTmp = null;
-            if (AutoTimeout.Perform(() =>
-            {
-                try
-                {
-                    if (Protocol18Handler.doPing(serverIP, serverPort, ref protocolversionTmp, ref forgeInfoTmp)
-                        || Protocol16Handler.doPing(serverIP, serverPort, ref protocolversionTmp))
-                    {
-                        success = true;
-                    }
-                    else Translations.WriteLineFormatted("error.unexpect_response");
+            try {
+                if (Protocol18Handler.doPing(serverIP, serverPort, ref protocolversionTmp, ref forgeInfoTmp) || Protocol16Handler.doPing(serverIP, serverPort, ref protocolversionTmp)) {
+                    if (protocolversion != 0 && protocolversion != protocolversionTmp)
+                        Translations.WriteLineFormatted("error.version_different");
+                    if (protocolversion == 0 && protocolversionTmp <= 1)
+                        Translations.WriteLineFormatted("error.no_version_report");
+                    if (protocolversion == 0)
+                        protocolversion = protocolversionTmp;
+                    forgeInfo = forgeInfoTmp;
+                    success = true;
+                    return success;
                 }
-                catch (Exception e)
-                {
-                    SentrySdk.CaptureException(e);
-                    ConsoleIO.WriteLineFormatted(String.Format("§8{0}: {1}", e.GetType().FullName, e.Message));
-                }
-            }, TimeSpan.FromSeconds(Settings.ResolveSrvRecordsShortTimeout ? 10 : 30)))
-            {
-                if (protocolversion != 0 && protocolversion != protocolversionTmp)
-                    Translations.WriteLineFormatted("error.version_different");
-                if (protocolversion == 0 && protocolversionTmp <= 1)
-                    Translations.WriteLineFormatted("error.no_version_report");
-                if (protocolversion == 0)
-                    protocolversion = protocolversionTmp;
-                forgeInfo = forgeInfoTmp;
-                return success;
+                else Translations.WriteLineFormatted("error.unexpect_response");
             }
-            else
-            {
-                Translations.WriteLineFormatted("error.connection_timeout");
-                return false;
+            catch (Exception e) {
+                SentrySdk.CaptureException(e);
+                ConsoleIO.WriteLineFormatted(String.Format("§8{0}: {1}", e.GetType().FullName, e.Message));
             }
+
+            return success;
         }
+
+
 
         /// <summary>
         /// Get a protocol handler for the specified Minecraft version
@@ -825,53 +809,46 @@ namespace MinecraftClient.Protocol
         /// <param name="host">Host to connect to</param>
         /// <param name="result">Request result</param>
         /// <returns>HTTP Status code</returns>
-        private static int DoHTTPSRequest(List<string> headers, string host, ref string result)
-        {
+        private static int DoHTTPSRequest(List<string> headers, string host, ref string result) {
             string postResult = null;
             int statusCode = 520;
             Exception exception = null;
-            AutoTimeout.Perform(() =>
-            {
-                try
-                {
-                    if (Settings.DebugMessages)
-                        ConsoleIO.WriteLineFormatted(Translations.Get("debug.request", host));
 
-                    TcpClient client = ProxyHandler.newTcpClient(host, 443, true);
-                    SslStream stream = new SslStream(client.GetStream());
-                    stream.AuthenticateAsClient(host);
+            try {
+                if (Settings.DebugMessages)
+                    ConsoleIO.WriteLineFormatted(Translations.Get("debug.request", host));
 
-                    if (Settings.DebugMessages)
-                        foreach (string line in headers)
-                            ConsoleIO.WriteLineFormatted("§8> " + line);
+                TcpClient client = ProxyHandler.newTcpClient(host, 443, true);
+                SslStream stream = new SslStream(client.GetStream());
+                stream.AuthenticateAsClient(host);
 
-                    stream.Write(Encoding.ASCII.GetBytes(String.Join("\r\n", headers.ToArray())));
-                    System.IO.StreamReader sr = new System.IO.StreamReader(stream);
-                    string raw_result = sr.ReadToEnd();
+                if (Settings.DebugMessages)
+                    foreach (string line in headers)
+                        ConsoleIO.WriteLineFormatted("§8> " + line);
 
-                    if (Settings.DebugMessages)
-                    {
-                        ConsoleIO.WriteLine("");
-                        foreach (string line in raw_result.Split('\n'))
-                            ConsoleIO.WriteLineFormatted("§8< " + line);
-                    }
+                stream.Write(Encoding.ASCII.GetBytes(String.Join("\r\n", headers.ToArray())));
+                System.IO.StreamReader sr = new System.IO.StreamReader(stream);
+                string raw_result = sr.ReadToEnd();
 
-                    if (raw_result.StartsWith("HTTP/1.1"))
-                    {
-                        postResult = raw_result.Substring(raw_result.IndexOf("\r\n\r\n") + 4);
-                        statusCode = Settings.str2int(raw_result.Split(' ')[1]);
-                    }
-                    else statusCode = 520; //Web server is returning an unknown error
+                if (Settings.DebugMessages) {
+                    ConsoleIO.WriteLine("");
+                    foreach (string line in raw_result.Split('\n'))
+                        ConsoleIO.WriteLineFormatted("§8< " + line);
                 }
-                catch (Exception e)
-                {
-                    SentrySdk.CaptureException(e);
-                    if (!(e is System.Threading.ThreadAbortException))
-                    {
-                        exception = e;
-                    }
+
+                if (raw_result.StartsWith("HTTP/1.1")) {
+                    postResult = raw_result.Substring(raw_result.IndexOf("\r\n\r\n") + 4);
+                    statusCode = Settings.str2int(raw_result.Split(' ')[1]);
                 }
-            }, TimeSpan.FromSeconds(30));
+                else statusCode = 520; //Web server is returning an unknown error
+            }
+            catch (Exception e) {
+                SentrySdk.CaptureException(e);
+                if (!(e is System.Threading.ThreadAbortException)) {
+                    exception = e;
+                }
+            }
+
             result = postResult;
             if (exception != null)
                 throw exception;
