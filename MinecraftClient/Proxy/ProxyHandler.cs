@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Net.Sockets;
 using Sentry;
-using Starksoft.Net.Proxy;
+using Starksoft.Aspen.Proxy;
 
 namespace MinecraftClient.Proxy
 {
