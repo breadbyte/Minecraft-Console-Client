@@ -140,7 +140,7 @@ namespace MinecraftClient
         /// <param name="server_ip">The server IP</param>
         /// <param name="port">The server port to use</param>
         /// <param name="protocolversion">Minecraft protocol version to use</param>
-        public McClient(string username, string uuid, string sessionID, int protocolversion, ForgeInfo forgeInfo, string server_ip, ushort port, CancellationToken cancellationToken)
+        public McClient(string username, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, CancellationToken cancellationToken)
         {
             Task.Factory.StartNew(async () => await StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, false, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
@@ -155,9 +155,9 @@ namespace MinecraftClient
         /// <param name="port">The server port to use</param>
         /// <param name="protocolversion">Minecraft protocol version to use</param>
         /// <param name="command">The text or command to send.</param>
-        public McClient(string username, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, string command, CancellationToken cancellationToken)
+        public McClient(string username, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, CancellationToken cancellationToken, string command)
         {
-            Task.Factory.StartNew(async () => await StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, true, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            Task.Factory.StartNew(async () => await StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, true, command, cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         /// <summary>
