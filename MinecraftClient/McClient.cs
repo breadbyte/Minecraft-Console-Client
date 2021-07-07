@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Net.Sockets;
 using System.Threading;
 using System.IO;
 using System.Net;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using MinecraftClient.ChatBots;
 using MinecraftClient.Protocol;
 using MinecraftClient.Proxy;
@@ -123,8 +126,8 @@ namespace MinecraftClient
 
         TcpClient client;
         IMinecraftCom handler;
-        Tuple<Thread, CancellationTokenSource>? cmdprompt = null;
-        Tuple<Thread, CancellationTokenSource>? timeoutdetector = null;
+        Tuple<Task, CancellationTokenSource>? cmdprompt = null;
+        Tuple<Task, CancellationTokenSource>? timeoutdetector = null;
 
         public ILogger Log;
 
@@ -137,9 +140,9 @@ namespace MinecraftClient
         /// <param name="server_ip">The server IP</param>
         /// <param name="port">The server port to use</param>
         /// <param name="protocolversion">Minecraft protocol version to use</param>
-        public McClient(string username, string uuid, string sessionID, int protocolversion, ForgeInfo forgeInfo, string server_ip, ushort port)
+        public McClient(string username, string uuid, string sessionID, int protocolversion, ForgeInfo forgeInfo, string server_ip, ushort port, CancellationToken cancellationToken)
         {
-            StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, false, "");
+            Task.Factory.StartNew(async () => await StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, false, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         /// <summary>
@@ -152,9 +155,9 @@ namespace MinecraftClient
         /// <param name="port">The server port to use</param>
         /// <param name="protocolversion">Minecraft protocol version to use</param>
         /// <param name="command">The text or command to send.</param>
-        public McClient(string username, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, string command)
+        public McClient(string username, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, string command, CancellationToken cancellationToken)
         {
-            StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, true, command);
+            Task.Factory.StartNew(async () => await StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, true, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         /// <summary>
@@ -168,7 +171,7 @@ namespace MinecraftClient
         /// <param name="uuid">The player's UUID for online-mode authentication</param>
         /// <param name="singlecommand">If set to true, the client will send a single command and then disconnect from the server</param>
         /// <param name="command">The text or command to send. Will only be sent if singlecommand is set to true.</param>
-        private void StartClient(string user, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, bool singlecommand, string command)
+        private async Task StartClient(string user, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, bool singlecommand, string command, CancellationToken cancellationToken)
         {
             terrainAndMovementsEnabled = Settings.TerrainAndMovements;
             inventoryHandlingEnabled = Settings.InventoryHandling;
@@ -222,43 +225,48 @@ namespace MinecraftClient
 
             try
             {
-                client = ProxyHandler.newTcpClient(host, port);
+                cancellationToken.ThrowIfCancellationRequested();
+                client = await ProxyHandler.newTcpClient(host, port);
+                if (client == null)
+                    return;
                 client.ReceiveBufferSize = 1024 * 1024;
                 client.ReceiveTimeout = 30000; // 30 seconds
-                handler = Protocol.ProtocolHandler.GetProtocolHandler(client, protocolversion, forgeInfo, this);
+                handler = ProtocolHandler.GetProtocolHandler(client, protocolversion, forgeInfo, this);
+                if (handler == null)
+                    ConsoleIO.WriteLine($"{Translations.Get("exception.version_unsupport")} {protocolversion}");
+                
                 Log.Info(Translations.Get("mcc.version_supported"));
 
                 if (!singlecommand) {
-                    timeoutdetector = new(new Thread(new ParameterizedThreadStart(TimeoutDetector)), new CancellationTokenSource());
-                    timeoutdetector.Item1.Name = "MCC Connection timeout detector";
-                    timeoutdetector.Item1.Start(timeoutdetector.Item2.Token);
+                    CancellationTokenSource cts = new CancellationTokenSource();
+                    var timeoutTask = Task.Factory.StartNew(() => { TimeoutDetector(cts.Token); }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    timeoutdetector = new(timeoutTask, cts);
                 }
 
                 try
                 {
-                    if (handler.Login())
-                    {
-                        if (singlecommand)
-                        {
+                    if (handler.Login()) {
+                        if (singlecommand) {
                             handler.SendChatMessage(command);
                             Log.Info(Translations.Get("mcc.single_cmd", command));
                             Thread.Sleep(5000);
                             handler.Disconnect();
                             Thread.Sleep(1000);
                         }
-                        else
-                        {
+                        else {
                             foreach (ChatBot bot in botsOnHold)
                                 BotLoad(bot, false);
                             botsOnHold.Clear();
 
-                            Log.Info(Translations.Get("mcc.joined", (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
+                            Log.Info(Translations.Get("mcc.joined",
+                                (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
 
-                            cmdprompt = new(new Thread(new ParameterizedThreadStart(CommandPrompt)), new CancellationTokenSource());
-                            cmdprompt.Item1.Name = "MCC Command prompt";
-                            cmdprompt.Item1.Start(cmdprompt.Item2.Token);
+                            CancellationTokenSource cts = new CancellationTokenSource();
+                            var cmdTask = Task.Factory.StartNew(() => { CommandPrompt(cts.Token); }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                            cmdprompt = new(cmdTask, cts);
                         }
                     }
+
                     else
                     {
                         Log.Error(Translations.Get("error.login_failed"));
@@ -406,7 +414,7 @@ namespace MinecraftClient
                     }
                 }
             }
-            while (! ( (CancellationToken)o! ).IsCancellationRequested);
+            while (!((CancellationToken)o!).IsCancellationRequested);
         }
 
         /// <summary>
@@ -455,17 +463,17 @@ namespace MinecraftClient
         /// </summary>
         public void OnConnectionLost(ChatBot.DisconnectReason reason, string message)
         {
+            StackTrace stackTrace = new StackTrace();
+            Console.WriteLine($"Connection Lost: Called From {stackTrace.GetFrame(1)?.GetMethod()?.Name}");
             world.Clear();
 
             if (timeoutdetector != null)
             {
-                if (Thread.CurrentThread != timeoutdetector.Item1)
-                    timeoutdetector.Item2.Cancel();
+                timeoutdetector.Item2.Cancel();
                 timeoutdetector = null;
             }
 
             bool will_restart = false;
-
             switch (reason)
             {
                 case ChatBot.DisconnectReason.ConnectionLost:
@@ -490,7 +498,7 @@ namespace MinecraftClient
             //Process AutoRelog last to make sure other bots can perform their cleanup tasks first (issue #1517)
             List<ChatBot> onDisconnectBotList = bots.Where(bot => !(bot is AutoRelog)).ToList();
             onDisconnectBotList.AddRange(bots.Where(bot => bot is AutoRelog));
-
+            
             foreach (ChatBot bot in onDisconnectBotList)
             {
                 try
@@ -507,7 +515,6 @@ namespace MinecraftClient
                     else throw; //ThreadAbortException should not be caught
                 }
             }
-
             if (!will_restart)
                 Program.HandleFailure();
         }
@@ -523,11 +530,12 @@ namespace MinecraftClient
         {
             try
             {
-                Thread.Sleep(500);
-                while (client.Client.Connected && !((CancellationToken)o!).IsCancellationRequested)
-                {
-                    string text = ConsoleIO.ReadLine();
-                    InvokeOnMainThread(() => HandleCommandPromptText(text));
+                while (!((CancellationToken) o!).IsCancellationRequested) {
+                    Thread.Sleep(500);
+                    while (client.Client.Connected) {
+                        string text = ConsoleIO.ReadLine();
+                        InvokeOnMainThread(() => HandleCommandPromptText(text));
+                    }
                 }
             }
             catch (IOException i) { SentrySdk.CaptureException(i); }

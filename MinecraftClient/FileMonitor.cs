@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Sentry;
 
 namespace MinecraftClient
@@ -13,7 +14,7 @@ namespace MinecraftClient
     public class FileMonitor : IDisposable
     {
         private Tuple<FileSystemWatcher, CancellationTokenSource>? monitor = null;
-        private Tuple<Thread, CancellationTokenSource>? polling = null;
+        private Tuple<Task, CancellationTokenSource>? polling = null;
 
         /// <summary>
         /// Create a new FileMonitor and start monitoring
@@ -48,9 +49,8 @@ namespace MinecraftClient
 
                 monitor = null;
                 var cancellationTokenSource = new CancellationTokenSource();
-                polling = new Tuple<Thread, CancellationTokenSource>(new Thread(() => PollingThread(folder, filename, handler, cancellationTokenSource.Token)), cancellationTokenSource);
-                polling.Item1.Name = String.Format("{0} Polling thread: {1}", this.GetType().Name, Path.Combine(folder, filename));
-                polling.Item1.Start();
+                var pollTask = Task.Factory.StartNew(() => { PollingThread(folder, filename, handler, cancellationTokenSource.Token); }, TaskCreationOptions.LongRunning);
+                polling = new(pollTask, cancellationTokenSource);
             }
         }
 

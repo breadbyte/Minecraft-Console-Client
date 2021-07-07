@@ -7,6 +7,8 @@ using System.Threading;
 using MinecraftClient.Crypto;
 using MinecraftClient.Proxy;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
+using FluentResults;
 using MinecraftClient.Mapping;
 using MinecraftClient.Inventory;
 using Sentry;
@@ -24,7 +26,7 @@ namespace MinecraftClient.Protocol.Handlers
         private string autocomplete_result = "";
         private bool encrypted = false;
         private int protocolversion;
-        private Tuple<Thread, CancellationTokenSource>? netRead = null;
+        private Tuple<Task, CancellationTokenSource>? netRead = null;
         Crypto.IAesStream s;
         TcpClient c;
 
@@ -196,9 +198,7 @@ namespace MinecraftClient.Protocol.Handlers
         }
 
         private void StartUpdating() {
-            netRead = new(new Thread(new ParameterizedThreadStart(Updater)), new CancellationTokenSource());
-            netRead.Item1.Name = "ProtocolPacketHandler";
-            netRead.Item1.Start(netRead.Item2.Token);
+            Task.Factory.StartNew(() => { Updater(netRead.Item2.Token); }, TaskCreationOptions.LongRunning);
         }
 
         /// <summary>
@@ -207,7 +207,7 @@ namespace MinecraftClient.Protocol.Handlers
         /// <returns>Net read thread ID</returns>
         public int GetNetReadThreadId()
         {
-            return netRead != null ? netRead.Item1.ManagedThreadId : -1;
+            return netRead != null ? Thread.CurrentThread.ManagedThreadId : -1;
         }
 
         public void Dispose()
@@ -809,53 +809,51 @@ namespace MinecraftClient.Protocol.Handlers
             return result.ToArray();
         }
 
-        public static bool doPing(string host, int port, ref int protocolversion)
-        {
-            try
-            {
-                string version = "";
-                TcpClient tcp = ProxyHandler.newTcpClient(host, port);
-                tcp.ReceiveTimeout = 30000; // 30 seconds
-                tcp.ReceiveTimeout = 5000; //MC 1.7.2+ SpigotMC servers won't respond, so we need a reasonable timeout.
-                byte[] ping = new byte[2] { 0xfe, 0x01 };
-                tcp.Client.Send(ping, SocketFlags.None);
-                tcp.Client.Receive(ping, 0, 1, SocketFlags.None);
+        public static async Task<Result<ProtocolHandler.ProtocolPingResult>> doPing(string host, int port) {
+            int protocolVersion;
 
-                if (ping[0] == 0xff)
-                {
-                    Protocol16Handler ComTmp = new Protocol16Handler(tcp);
-                    string result = ComTmp.readNextString();
+            string version = "";
+            var tcp = ProxyHandler.newTcpClient(host, port).Result;
 
-                    if (Settings.DebugMessages)
-                    {
-                        // May contain formatting codes, cannot use WriteLineFormatted
-                        Console.ForegroundColor = ConsoleColor.DarkGray;
-                        ConsoleIO.WriteLine(result);
-                        Console.ForegroundColor = ConsoleColor.Gray;
-                    }
+            if (tcp == null)
+                return Result.Fail("TcpClient failed to connect");
 
-                    if (result.Length > 2 && result[0] == '§' && result[1] == '1')
-                    {
-                        string[] tmp = result.Split((char)0x00);
-                        protocolversion = (byte)Int16.Parse(tmp[1]);
-                        version = tmp[2];
+            tcp.ReceiveTimeout = 30000; // 30 seconds
+            tcp.ReceiveTimeout = 5000; //MC 1.7.2+ SpigotMC servers won't respond, so we need a reasonable timeout.
+            byte[] ping = new byte[2] {0xfe, 0x01};
+            tcp.Client.Send(ping, SocketFlags.None);
+            tcp.Client.Receive(ping, 0, 1, SocketFlags.None);
 
-                        if (protocolversion == 127) //MC 1.7.2+
-                            return false;
-                    }
-                    else
-                    {
-                        protocolversion = (byte)39;
-                        version = "B1.8.1 - 1.3.2";
-                    }
+            if (ping[0] == 0xff) {
+                Protocol16Handler ComTmp = new Protocol16Handler(tcp);
+                string result = ComTmp.readNextString();
 
-                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.use_version", version, protocolversion));
-
-                    return true;
+                if (Settings.DebugMessages) {
+                    // May contain formatting codes, cannot use WriteLineFormatted
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+                    ConsoleIO.WriteLine(result);
+                    Console.ForegroundColor = ConsoleColor.Gray;
                 }
-                else return false;
+
+                if (result.Length > 2 && result[0] == '§' && result[1] == '1') {
+                    string[] tmp = result.Split((char) 0x00);
+                    protocolVersion = (byte) Int16.Parse(tmp[1]);
+                    version = tmp[2];
+
+                    if (protocolVersion == 127) //MC 1.7.2+
+                        return Result.Fail("Server uses Protocol18");
+                }
+                else {
+                    protocolVersion = (byte) 39;
+                    version = "B1.8.1 - 1.3.2";
+                }
+
+                ConsoleIO.WriteLineFormatted(Translations.Get("mcc.use_version", version, protocolVersion));
+
+                Result.Ok(new ProtocolHandler.ProtocolPingResult(protocolVersion, null));
             }
-            catch { return false; }
+            
+            return Result.Fail(Translations.Get("error.unexpect_response"));
         }
 
         public bool SelectTrade(int selectedSlot)

@@ -116,7 +116,7 @@ namespace MinecraftClient.Protocol
 
             Response response = Response.Empty();
 
-            TcpClient client = ProxyHandler.newTcpClient(host, port, true);
+            TcpClient client = ProxyHandler.newTcpClient(host, port, true).Result;
             client.ReceiveTimeout = 5000;
             Stream stream;
             if (isSecure) {

@@ -5,15 +5,16 @@ using System.Text;
 using System.Net.Sockets;
 using System.Net.Security;
 using System.Threading;
+using System.Threading.Tasks;
 using DnsClient;
+using FluentResults;
 using MinecraftClient.Proxy;
 using MinecraftClient.Protocol.Handlers;
 using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Protocol.Session;
 using Sentry;
 
-namespace MinecraftClient.Protocol
-{
+namespace MinecraftClient.Protocol {
     /// <summary>
     /// Handle login, session, server ping and provide a protocol handler for interacting with a minecraft server.
     /// </summary>
@@ -22,8 +23,7 @@ namespace MinecraftClient.Protocol
     ///  - Add protocol ID in GetProtocolHandler()
     ///  - Add 1.X.X case in MCVer2ProtocolVersion()
     /// </remarks>
-    public static class ProtocolHandler
-    {
+    public static class ProtocolHandler {
         /// <summary>
         /// Perform a DNS lookup for a Minecraft Service using the specified domain name
         /// </summary>
@@ -56,9 +56,10 @@ namespace MinecraftClient.Protocol
                     }
                 }
                 catch (Exception e) {
-                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.not_found", domainVal, e.GetType().FullName, e.Message));
+                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.not_found", domainVal, e.GetType().FullName,
+                        e.Message));
                 }
-                
+
                 domain = domainVal;
                 port = portVal;
                 return foundService;
@@ -72,34 +73,26 @@ namespace MinecraftClient.Protocol
         /// </summary>
         /// <param name="serverIP">Server IP to ping</param>
         /// <param name="serverPort">Server Port to ping</param>
-        /// <param name="protocolversion">Will contain protocol version, if ping successful</param>
         /// <returns>TRUE if ping was successful</returns>
-        public static bool GetServerInfo(string serverIP, ushort serverPort, ref int protocolversion,
-            ref ForgeInfo forgeInfo) {
+        public static async Task<Result<ProtocolPingResult>> GetServerInfo(string serverIP, ushort serverPort) {
             bool success = false;
-            int protocolversionTmp = 0;
-            ForgeInfo forgeInfoTmp = null;
-            try {
-                if (Protocol18Handler.doPing(serverIP, serverPort, ref protocolversionTmp, ref forgeInfoTmp) || Protocol16Handler.doPing(serverIP, serverPort, ref protocolversionTmp)) {
-                    if (protocolversion != 0 && protocolversion != protocolversionTmp)
-                        Translations.WriteLineFormatted("error.version_different");
-                    if (protocolversion == 0 && protocolversionTmp <= 1)
-                        Translations.WriteLineFormatted("error.no_version_report");
-                    if (protocolversion == 0)
-                        protocolversion = protocolversionTmp;
-                    forgeInfo = forgeInfoTmp;
-                    success = true;
-                    return success;
+            ProtocolPingResult protocolResult;
+            var protocol16 = await Protocol16Handler.doPing(serverIP, serverPort);
+            if (protocol16.IsSuccess) {
+                protocolResult = protocol16.Value;
+            }
+            else {
+                var protocol18 = await Protocol18Handler.doPing(serverIP, serverPort);
+                if (protocol18.IsFailed) {
+                    return Result.Fail(Translations.Get("error.connect"));
                 }
-                else Translations.WriteLineFormatted("error.unexpect_response");
-            }
-            catch (Exception e) {
-                SentrySdk.CaptureException(e);
-                ConsoleIO.WriteLineFormatted(String.Format("§8{0}: {1}", e.GetType().FullName, e.Message));
-            }
 
-            return success;
+                protocolResult = protocol18.Value;
+            }
+            
+            return Result.Ok(protocolResult);
         }
+
 
 
 
@@ -110,7 +103,7 @@ namespace MinecraftClient.Protocol
         /// <param name="ProtocolVersion">Protocol version to handle</param>
         /// <param name="Handler">Handler with the appropriate callbacks</param>
         /// <returns></returns>
-        public static IMinecraftCom GetProtocolHandler(TcpClient Client, int ProtocolVersion, ForgeInfo forgeInfo, IMinecraftComHandler Handler)
+        public static IMinecraftCom? GetProtocolHandler(TcpClient Client, int ProtocolVersion, ForgeInfo forgeInfo, IMinecraftComHandler Handler)
         {
             int[] supportedVersions_Protocol16 = { 51, 60, 61, 72, 73, 74, 78 };
             if (Array.IndexOf(supportedVersions_Protocol16, ProtocolVersion) > -1)
@@ -118,7 +111,7 @@ namespace MinecraftClient.Protocol
             int[] supportedVersions_Protocol18 = { 4, 5, 47, 107, 108, 109, 110, 210, 315, 316, 335, 338, 340, 393, 401, 404, 477, 480, 485, 490, 498, 573, 575, 578, 735, 736, 751, 753, 754, 755 };
             if (Array.IndexOf(supportedVersions_Protocol18, ProtocolVersion) > -1)
                 return new Protocol18Handler(Client, ProtocolVersion, Handler, forgeInfo);
-            throw new NotSupportedException(Translations.Get("exception.version_unsupport", ProtocolVersion));
+            return null;
         }
 
         /// <summary>
@@ -818,7 +811,7 @@ namespace MinecraftClient.Protocol
                 if (Settings.DebugMessages)
                     ConsoleIO.WriteLineFormatted(Translations.Get("debug.request", host));
 
-                TcpClient client = ProxyHandler.newTcpClient(host, 443, true);
+                TcpClient client = ProxyHandler.newTcpClient(host, 443, true).Result;
                 SslStream stream = new SslStream(client.GetStream());
                 stream.AuthenticateAsClient(host);
 
@@ -880,6 +873,16 @@ namespace MinecraftClient.Protocol
             }
 
             return result.ToString();
+        }
+
+        public struct ProtocolPingResult {
+            public int ProtocolVersion;
+            public ForgeInfo ForgeInfo;
+
+            public ProtocolPingResult(int protocolVersion, ForgeInfo? forgeInfo) {
+                ProtocolVersion = protocolVersion;
+                ForgeInfo = forgeInfo;
+            }
         }
     }
 }

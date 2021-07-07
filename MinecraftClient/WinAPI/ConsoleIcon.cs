@@ -7,6 +7,7 @@ using System.Threading;
 using System.Net;
 using System.IO;
 using System.Drawing;
+using System.Threading.Tasks;
 
 namespace MinecraftClient.WinAPI
 {
@@ -43,33 +44,28 @@ namespace MinecraftClient.WinAPI
         /// Asynchronously download the player's skin and set the head as console icon
         /// </summary>
         public static void setPlayerIconAsync(string playerName) {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                Thread t = new Thread(new ThreadStart(delegate {
-                        HttpWebRequest httpWebRequest =
-                            (HttpWebRequest) HttpWebRequest.Create(
-                                "https://minotar.net/helm/" + playerName + "/100.png");
-                        try {
-                            using (HttpWebResponse httpWebReponse = (HttpWebResponse) httpWebRequest.GetResponse()) {
-                                try {
-                                    Bitmap skin = new Bitmap(Image.FromStream(httpWebReponse.GetResponseStream())); //Read skin from network
-                                    SetWindowIcon(Icon.FromHandle(skin.GetHicon())); // Windows 10+ (New console)
-                                    SetConsoleIcon(skin.GetHicon()); // Windows 8 and lower (Older console)
-                                }
-                                catch (ArgumentException) {
-                                    /* Invalid image in HTTP response */
-                                }
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+                Task.Run(() => {
+                    HttpWebRequest httpWebRequest =
+                        (HttpWebRequest) HttpWebRequest.Create(
+                            "https://minotar.net/helm/" + playerName + "/100.png");
+                    try {
+                        using (HttpWebResponse httpWebReponse = (HttpWebResponse) httpWebRequest.GetResponse()) {
+                            try {
+                                Bitmap skin = new Bitmap(Image.FromStream(httpWebReponse.GetResponseStream())); //Read skin from network
+                                SetWindowIcon(Icon.FromHandle(skin.GetHicon())); // Windows 10+ (New console)
+                                SetConsoleIcon(skin.GetHicon()); // Windows 8 and lower (Older console)
+                            }
+                            catch (ArgumentException) {
+                                /* Invalid image in HTTP response */
                             }
                         }
-                        catch (WebException) //Skin not found? Reset to default icon
-                        {
-                            revertToMCCIcon();
-                        }
                     }
-                ));
-                t.Name = "Player skin icon setter";
-                t.Start();
-
+                    catch (WebException) //Skin not found? Reset to default icon
+                    {
+                        revertToMCCIcon();
+                    }
+                });
             }
         }
 

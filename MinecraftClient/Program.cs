@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using MinecraftClient.Protocol;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Protocol.Session;
 using MinecraftClient.WinAPI;
@@ -30,6 +32,7 @@ namespace MinecraftClient
     static class Program
     {
         private static McClient client;
+        private static CancellationTokenSource clientCancellationToken = new();
         public static string[] startupargs;
 
         public const string Version = MCHighestVersion;
@@ -37,26 +40,25 @@ namespace MinecraftClient
         public const string MCHighestVersion = "1.17";
         public static readonly string BuildInfo = null;
 
-        private static Tuple<Thread, CancellationTokenSource>? offlinePrompt = null;
+        private static Tuple<Task, CancellationTokenSource>? offlinePrompt = null;
         private static bool useMcVersionOnce = false;
 
         /// <summary>
         /// The main entry point of Minecraft Console Client
         /// </summary>
-        static void Main(string[] args)
+        static void Main(string[] args) => MainAsync(args).GetAwaiter().GetResult(); 
+        
+        static async Task MainAsync(string[] args)
         {
             using (SentrySdk.Init(o => {
                 o.Dsn = "https://881fa1bd09de4e2791add4facf090525@o405596.ingest.sentry.io/5848263";
-                // Set traces_sample_rate to 1.0 to capture 100% of transactions for performance monitoring.
-                // We recommend adjusting this value in production.
                 o.TracesSampleRate = 1.0;
             })) {
-                Console.WriteLine("Console Client for MC {0} to {1} - v{2} - By ORelio & Contributors", MCLowestVersion,
-                    MCHighestVersion, Version);
+                Console.WriteLine("Console Client for MC {0} to {1} - v{2} - By ORelio & Contributors", MCLowestVersion, MCHighestVersion, Version);
 
                 //Build information to facilitate processing of bug reports
                 if (BuildInfo != null) {
-                    ConsoleIO.WriteLineFormatted("§8" + BuildInfo);
+                    ConsoleIO.WriteLineFormatted("§8" + BuildInfo + " buildinfo");
                 }
 
                 //Debug input ?
@@ -178,6 +180,7 @@ namespace MinecraftClient
 
                     if (offlinePrompt != null) {
                         offlinePrompt.Item2.Cancel();
+                        offlinePrompt.Item1.Dispose();
                         offlinePrompt = null;
                         ConsoleIO.Reset();
                     }
@@ -192,7 +195,7 @@ namespace MinecraftClient
 
 
                 startupargs = args;
-                InitializeClient();
+                await InitializeClient();
             }
         }
 
@@ -215,7 +218,7 @@ namespace MinecraftClient
         /// <summary>
         /// Start a new Client
         /// </summary>
-        private static void InitializeClient()
+        private static async Task InitializeClient()
         {
             SessionToken session = new SessionToken();
 
@@ -348,11 +351,18 @@ namespace MinecraftClient
                     if (protocolversion != 0)
                         Translations.WriteLine("mcc.forge");
                     else Translations.WriteLine("mcc.retrieve");
-                    if (!ProtocolHandler.GetServerInfo(Settings.ServerIP, Settings.ServerPort, ref protocolversion, ref forgeInfo))
-                    {
+                    var serverInfo = await ProtocolHandler.GetServerInfo(Settings.ServerIP, Settings.ServerPort);
+                    if (serverInfo.IsFailed) {
                         HandleFailure(Translations.Get("error.ping"), true, ChatBots.AutoRelog.DisconnectReason.ConnectionLost);
                         return;
                     }
+                    
+                    if (serverInfo.Value.ProtocolVersion != 0 && protocolversion != 0 && serverInfo.Value.ProtocolVersion != protocolversion )
+                        Translations.WriteLineFormatted("error.version_different");
+                    if (serverInfo.Value.ProtocolVersion == 0 && protocolversion != 0)
+                        Translations.WriteLineFormatted("error.no_version_report");
+
+                    protocolversion = serverInfo.Value.ProtocolVersion;
                 }
 
                 //Force-enable Forge support?
@@ -371,22 +381,17 @@ namespace MinecraftClient
                 }
 
                 //Proceed to server login
-                if (protocolversion != 0)
-                {
-                    try
-                    {
-                        //Start the main TCP client
-                        if (Settings.SingleCommand != "")
-                        {
-                            client = new McClient(session.PlayerName, session.PlayerID, session.ID, Settings.ServerIP, Settings.ServerPort, protocolversion, forgeInfo, Settings.SingleCommand);
-                        }
-                        else client = new McClient(session.PlayerName, session.PlayerID, session.ID, protocolversion, forgeInfo, Settings.ServerIP, Settings.ServerPort);
-
-                        //Update console title
-                        if (Settings.ConsoleTitle != "")
-                            Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
+                if (protocolversion != 0) {
+                    //Start the main TCP client
+                    if (Settings.SingleCommand != "") {
+                        client = new McClient(session.PlayerName, session.PlayerID, session.ID, Settings.ServerIP, Settings.ServerPort, protocolversion, forgeInfo, Settings.SingleCommand, clientCancellationToken.Token);
                     }
-                    catch (NotSupportedException e) { SentrySdk.CaptureException(e); HandleFailure(Translations.Get("error.unsupported"), true); }
+                    else
+                        client = new McClient(session.PlayerName, session.PlayerID, session.ID, protocolversion, forgeInfo, Settings.ServerIP, Settings.ServerPort, clientCancellationToken.Token);
+
+                    //Update console title
+                    if (Settings.ConsoleTitle != "")
+                        Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
                 }
                 else HandleFailure(Translations.Get("error.determine"), true);
             }
@@ -415,17 +420,21 @@ namespace MinecraftClient
                 }
                 HandleFailure(failureMessage, false, ChatBot.DisconnectReason.LoginRejected);
             }
+
+            try {
+                // Keep the program alive
+                await Task.Delay(-1, clientCancellationToken.Token);
+            }
+            catch (TaskCanceledException) { }
         }
 
         /// <summary>
         /// Disconnect the current client from the server and restart it
         /// </summary>
         /// <param name="delaySeconds">Optional delay, in seconds, before restarting</param>
-        public static void Restart(int delaySeconds = 0)
-        {
-            new Thread(new ThreadStart(delegate
-            {
-                if (client != null) { client.Disconnect(); ConsoleIO.Reset(); }
+        public static void Restart(int delaySeconds = 0) {
+            Task.Run(async () => {
+                if (client != null) { clientCancellationToken.Cancel(); client.Disconnect(); ConsoleIO.Reset(); }
                 if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt = null; ConsoleIO.Reset(); }
                 if (delaySeconds > 0)
                 {
@@ -433,22 +442,20 @@ namespace MinecraftClient
                     System.Threading.Thread.Sleep(delaySeconds * 1000);
                 }
                 Translations.WriteLine("mcc.restart");
-                InitializeClient();
-            })).Start();
+                await InitializeClient();
+            });
         }
 
         /// <summary>
         /// Disconnect the current client from the server and exit the app
         /// </summary>
-        public static void Exit(int exitcode = 0)
-        {
-            new Thread(new ThreadStart(delegate
-            {
-                if (client != null) { client.Disconnect(); ConsoleIO.Reset(); }
+        public static void Exit(int exitcode = 0) {
+            Task.Run(() => {
+                if (client != null) { clientCancellationToken.Cancel(); client.Disconnect(); ConsoleIO.Reset(); }
                 if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt = null; ConsoleIO.Reset(); }
                 if (Settings.playerHeadAsIcon) { ConsoleIcon.revertToMCCIcon(); }
                 Environment.Exit(exitcode);
-            })).Start();
+            });
         }
 
         /// <summary>
@@ -460,6 +467,8 @@ namespace MinecraftClient
         /// <param name="disconnectReason">If set, the error message will be processed by the AutoRelog bot</param>
         public static void HandleFailure(string errorMessage = null, bool versionError = false, ChatBots.AutoRelog.DisconnectReason? disconnectReason = null)
         {
+            StackTrace stackTrace = new StackTrace();
+            Console.WriteLine($"Failure handled from {stackTrace.GetFrame(1)?.GetMethod()?.Name}");
             if (!String.IsNullOrEmpty(errorMessage))
             {
                 ConsoleIO.Reset();
@@ -490,11 +499,11 @@ namespace MinecraftClient
 
                 if (offlinePrompt == null) {
                     var cancellationTokenSource = new CancellationTokenSource();
-                    offlinePrompt = new(new Thread(new ThreadStart(delegate {
+                    var offlineTask = Task.Factory.StartNew(() => {
                         string command = " ";
                         ConsoleIO.WriteLineFormatted(Translations.Get("mcc.disconnected", (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
                         Translations.WriteLineFormatted("mcc.press_exit");
-                        
+
                         while (!cancellationTokenSource.IsCancellationRequested) {
                             while (command.Length > 0) {
                                 if (!ConsoleIO.BasicIO) {
@@ -539,8 +548,9 @@ namespace MinecraftClient
                                 }
                             }
                         }
-                    })), cancellationTokenSource);
-                    offlinePrompt.Item1.Start();
+                    }, cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
+                    
+                    offlinePrompt = new(offlineTask, cancellationTokenSource);
                 }
             }
             else

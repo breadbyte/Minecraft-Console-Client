@@ -7,6 +7,7 @@ using Microsoft.CSharp;
 using System.CodeDom.Compiler;
 using System.Reflection;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using Sentry;
 
 namespace MinecraftClient.ChatBots
@@ -24,7 +25,7 @@ namespace MinecraftClient.ChatBots
         private int nextline = 0;
         private string owner;
         private bool csharp;
-        private Thread thread;
+        private Task botTask;
         private Dictionary<string, object> localVars;
 
         public Script(string filename)
@@ -135,7 +136,7 @@ namespace MinecraftClient.ChatBots
             {
                 lines = System.IO.File.ReadAllLines(file, Encoding.UTF8);
                 csharp = file.EndsWith(".cs");
-                thread = null;
+                botTask = null;
 
                 if (!String.IsNullOrEmpty(owner))
                     SendPrivateMessage(owner, Translations.Get("bot.script.pm.loaded", file));
@@ -155,31 +156,24 @@ namespace MinecraftClient.ChatBots
         {
             if (csharp) //C# compiled script
             {
-                //Initialize thread on first update
-                if (thread == null)
-                {
-                    thread = new Thread(() =>
+                botTask = Task.Factory.StartNew(() => {
+                    try
                     {
-                        try
-                        {
-                            CSharpRunner.Run(this, lines, args, localVars);
-                        }
-                        catch (CSharpException e)
-                        {
-                            SentrySdk.CaptureException(e);
-                            string errorMessage = Translations.Get("bot.script.fail", file, e.ExceptionType);
-                            LogToConsole(errorMessage);
-                            if (owner != null)
-                                SendPrivateMessage(owner, errorMessage);
-                            LogToConsole(e.InnerException);
-                        }
-                    });
-                    thread.Name = "MCC Script - " + file;
-                    thread.Start();
-                }
-
+                        CSharpRunner.Run(this, lines, args, localVars);
+                    }
+                    catch (CSharpException e)
+                    {
+                        SentrySdk.CaptureException(e);
+                        string errorMessage = Translations.Get("bot.script.fail", file, e.ExceptionType);
+                        LogToConsole(errorMessage);
+                        if (owner != null)
+                            SendPrivateMessage(owner, errorMessage);
+                        LogToConsole(e.InnerException);
+                    }
+                }, TaskCreationOptions.LongRunning);
+                
                 //Unload bot once the thread has finished running
-                if (thread != null && !thread.IsAlive)
+                if (botTask != null && botTask.IsCompleted)
                 {
                     UnloadBot();
                 }

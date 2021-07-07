@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using MinecraftClient.Protocol.Handlers.Forge;
 using System.Threading;
+using System.Threading.Tasks;
+using FluentResults;
 
 namespace MinecraftClient.Protocol.Handlers
 {
@@ -440,10 +442,12 @@ namespace MinecraftClient.Protocol.Handlers
         /// <param name="jsonData">JSON data returned by the server</param>
         /// <param name="forgeInfo">ForgeInfo to populate</param>
         /// <returns>True if the server is running Forge</returns>
-        public static bool ServerInfoCheckForge(Json.JSONData jsonData, ref ForgeInfo forgeInfo)
+        public static async Task<Result<ForgeInfo>> ServerInfoCheckForge(Json.JSONData jsonData)
         {
-            return ServerInfoCheckForgeSub(jsonData, ref forgeInfo, FMLVersion.FML)   // MC 1.12 and lower
-                || ServerInfoCheckForgeSub(jsonData, ref forgeInfo, FMLVersion.FML2); // MC 1.13 and greater
+            var fml = await ServerInfoCheckForgeSub(jsonData, FMLVersion.FML);   // MC 1.12 and lower
+            var fml2 = await ServerInfoCheckForgeSub(jsonData, FMLVersion.FML2); // MC 1.13 and greater
+
+            return fml.IsFailed ? fml2 : fml;
         }
 
         /// <summary>
@@ -477,7 +481,7 @@ namespace MinecraftClient.Protocol.Handlers
         /// <param name="forgeInfo">ForgeInfo to populate</param>
         /// <param name="fmlVersion">Forge protocol version</param>
         /// <returns>True if the server is running Forge</returns>
-        private static bool ServerInfoCheckForgeSub(Json.JSONData jsonData, ref ForgeInfo forgeInfo, FMLVersion fmlVersion)
+        private static async Task<Result<ForgeInfo>> ServerInfoCheckForgeSub(Json.JSONData jsonData, FMLVersion fmlVersion)
         {
             string forgeDataTag;
             string versionField;
@@ -502,9 +506,8 @@ namespace MinecraftClient.Protocol.Handlers
             if (jsonData.Properties.ContainsKey(forgeDataTag) && jsonData.Properties[forgeDataTag].Type == Json.JSONData.DataType.Object)
             {
                 Json.JSONData modData = jsonData.Properties[forgeDataTag];
-                if (modData.Properties.ContainsKey(versionField) && modData.Properties[versionField].StringValue == versionString)
-                {
-                    forgeInfo = new ForgeInfo(modData, fmlVersion);
+                if (modData.Properties.ContainsKey(versionField) && modData.Properties[versionField].StringValue == versionString) {
+                    ForgeInfo forgeInfo = new ForgeInfo(modData, fmlVersion);
                     if (forgeInfo.Mods.Any())
                     {
                         ConsoleIO.WriteLineFormatted(Translations.Get("forge.with_mod", forgeInfo.Mods.Count));
@@ -514,7 +517,8 @@ namespace MinecraftClient.Protocol.Handlers
                             foreach (ForgeInfo.ForgeMod mod in forgeInfo.Mods)
                                 ConsoleIO.WriteLineFormatted("§8  " + mod.ToString());
                         }
-                        return true;
+
+                        return Result.Ok(forgeInfo);
                     }
                     else
                     {
@@ -523,7 +527,8 @@ namespace MinecraftClient.Protocol.Handlers
                     }
                 }
             }
-            return false;
+
+            return Result.Fail(Translations.Get("error.unexpect_response"));
         }
     }
 }

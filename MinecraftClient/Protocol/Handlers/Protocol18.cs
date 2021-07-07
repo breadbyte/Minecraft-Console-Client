@@ -18,6 +18,8 @@ using MinecraftClient.Inventory.ItemPalettes;
 using MinecraftClient.Protocol.Handlers.PacketPalettes;
 using MinecraftClient.Logger;
 using System.Threading.Tasks;
+using FluentResults;
+using Org.BouncyCastle.Crypto.Tls;
 using Sentry;
 
 namespace MinecraftClient.Protocol.Handlers
@@ -69,7 +71,7 @@ namespace MinecraftClient.Protocol.Handlers
         PacketTypePalette packetPalette;
         SocketWrapper socketWrapper;
         DataTypes dataTypes;
-        Tuple<Thread, CancellationTokenSource>? netRead = null; // main thread
+        Tuple<Task, CancellationTokenSource>? netRead = null; // main thread
         ILogger log;
 
         public Protocol18Handler(TcpClient Client, int protocolVersion, IMinecraftComHandler handler, ForgeInfo forgeInfo)
@@ -170,10 +172,7 @@ namespace MinecraftClient.Protocol.Handlers
             catch (System.IO.IOException e) { SentrySdk.CaptureException(e); }
             catch (SocketException e) { SentrySdk.CaptureException(e); }
             catch (ObjectDisposedException e) { SentrySdk.CaptureException(e); }
-            catch (OperationCanceledException e) {
-                SentrySdk.CaptureException(e);
-                Console.WriteLine("PROTOCOL18 CANCELLED");
-            }
+            catch (OperationCanceledException e) { SentrySdk.CaptureException(e); }
 
             handler.OnConnectionLost(ChatBot.DisconnectReason.ConnectionLost, "");
         }
@@ -1140,9 +1139,9 @@ namespace MinecraftClient.Protocol.Handlers
         /// Start the updating thread. Should be called after login success.
         /// </summary>
         private void StartUpdating() {
-            netRead = new Tuple<Thread, CancellationTokenSource>(new Thread(new ParameterizedThreadStart(Updater)), new CancellationTokenSource());
-            netRead.Item1.Name = "ProtocolPacketHandler";
-            netRead.Item1.Start(netRead.Item2.Token);
+            var ctx = new CancellationTokenSource();
+            var updateTask = Task.Factory.StartNew(() => { Updater(ctx.Token); }, TaskCreationOptions.LongRunning);
+            netRead = new(updateTask, ctx);
         }
 
         /// <summary>
@@ -1151,7 +1150,7 @@ namespace MinecraftClient.Protocol.Handlers
         /// <returns>Net read thread ID</returns>
         public int GetNetReadThreadId()
         {
-            return netRead != null ? netRead.Item1.ManagedThreadId : -1;
+            return netRead != null ? Thread.CurrentThread.ManagedThreadId : -1;
         }
 
         /// <summary>
@@ -1386,13 +1385,11 @@ namespace MinecraftClient.Protocol.Handlers
             SendPacket(PacketTypesOut.TabComplete, tabcomplete_packet);
 
             int wait_left = 50; //do not wait more than 5 seconds (50 * 100 ms)
-            Thread t1 = new Thread(new ThreadStart(delegate
-            {
+            Task.Run(() => {
                 while (wait_left > 0 && !autocomplete_received) { System.Threading.Thread.Sleep(100); wait_left--; }
                 if (autocomplete_result.Count > 0)
                     ConsoleIO.WriteLineFormatted("§8" + String.Join(" ", autocomplete_result), false);
-            }));
-            t1.Start();
+            });
             return autocomplete_result;
         }
 
@@ -1400,10 +1397,13 @@ namespace MinecraftClient.Protocol.Handlers
         /// Ping a Minecraft server to get information about the server
         /// </summary>
         /// <returns>True if ping was successful</returns>
-        public static bool doPing(string host, int port, ref int protocolversion, ref ForgeInfo forgeInfo)
-        {
+        public static async Task<Result<ProtocolHandler.ProtocolPingResult>> doPing(string host, int port) {
+            int protocolVersionLocal = 0;
             string version = "";
-            TcpClient tcp = ProxyHandler.newTcpClient(host, port);
+            
+            TcpClient tcp = ProxyHandler.newTcpClient(host, port).Result;
+            if (tcp == null)
+                return Result.Fail("TcpClient failed to connect");
             tcp.ReceiveTimeout = 30000; // 30 seconds
             tcp.ReceiveBufferSize = 1024 * 1024;
             SocketWrapper socketWrapper = new SocketWrapper(tcp);
@@ -1452,19 +1452,20 @@ namespace MinecraftClient.Protocol.Handlers
 
                             //Retrieve protocol version number for handling this server
                             if (versionData.Properties.ContainsKey("protocol"))
-                                protocolversion = int.Parse(versionData.Properties["protocol"].StringValue);
+                                protocolVersionLocal = int.Parse(versionData.Properties["protocol"].StringValue);
 
                             // Check for forge on the server.
-                            Protocol18Forge.ServerInfoCheckForge(jsonData, ref forgeInfo);
+                            var serverForgeInfo = await Protocol18Forge.ServerInfoCheckForge(jsonData);
+                            
+                            ConsoleIO.WriteLineFormatted(Translations.Get("mcc.server_protocol", version, protocolVersionLocal + (serverForgeInfo.IsSuccess ? Translations.Get("mcc.with_forge") : "")));
 
-                            ConsoleIO.WriteLineFormatted(Translations.Get("mcc.server_protocol", version, protocolversion + (forgeInfo != null ? Translations.Get("mcc.with_forge") : "")));
-
-                            return true;
+                            return Result.Ok(new ProtocolHandler.ProtocolPingResult(protocolVersionLocal, serverForgeInfo.IsSuccess ? serverForgeInfo.Value : null));
                         }
                     }
                 }
             }
-            return false;
+
+            return Result.Fail(Translations.Get("error.unexpect_response"));
         }
 
         /// <summary>
