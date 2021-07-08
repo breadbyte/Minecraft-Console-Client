@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using FluentResults;
 using Polly;
 using Sentry;
 using Starksoft.Aspen.Proxy;
@@ -34,7 +35,7 @@ namespace MinecraftClient.Proxy {
         /// <param name="port">Target port</param>
         /// <param name="login">True if the purpose is logging in to a Minecraft account</param>
 
-        public static async Task<TcpClient?> newTcpClient(string host, int port, bool login = false) {
+        public static async Task<Result<TcpClient>> newTcpClient(string host, int port, bool login = false) {
             TcpClient? client = null;
             if (login ? Settings.ProxyEnabledLogin : Settings.ProxyEnabledIngame) {
                 ProxyType innerProxytype = ProxyType.Http;
@@ -69,8 +70,11 @@ namespace MinecraftClient.Proxy {
                     });
 
                 try {
-                    return await retryPolicy.ExecuteAsync(() => {
-                        return Task.Run(() => proxy.CreateConnection(host, port));
+                    return await retryPolicy.ExecuteAsync<Result<TcpClient>>(async () => {
+                        var result = await Task.Run(() => proxy.CreateConnection(host, port));
+                        if (result == null)
+                            return Result.Fail($"Failed to connect to host {host} with port {port}");
+                        return Result.Ok(result);
                     });
                 }
                 catch (ProxyException e) {
@@ -88,7 +92,7 @@ namespace MinecraftClient.Proxy {
                     var tcpClient = new TcpClient();
                     tcpClient.ReceiveTimeout = 5000;
                     await tcpClient.ConnectAsync(host, port);
-                    return tcpClient;
+                    return Result.Ok(tcpClient);
                 }
                 // todo handle gracefully
                 catch (SocketException e) {
@@ -99,7 +103,7 @@ namespace MinecraftClient.Proxy {
                 }
             }
 
-            return null;
+            return Result.Fail("Failed to create a TcpClient");
         }
     }
 }

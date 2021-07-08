@@ -813,11 +813,13 @@ namespace MinecraftClient.Protocol.Handlers
             int protocolVersion;
 
             string version = "";
-            var tcp = ProxyHandler.newTcpClient(host, port).Result;
+            var tcpResult = ProxyHandler.newTcpClient(host, port).Result;
 
-            if (tcp == null)
+            if (tcpResult.IsFailed)
                 return Result.Fail("TcpClient failed to connect");
 
+            var tcp = tcpResult.Value;
+            
             tcp.ReceiveTimeout = 30000; // 30 seconds
             tcp.ReceiveTimeout = 5000; //MC 1.7.2+ SpigotMC servers won't respond, so we need a reasonable timeout.
             byte[] ping = new byte[2] {0xfe, 0x01};

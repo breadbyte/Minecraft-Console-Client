@@ -1401,9 +1401,11 @@ namespace MinecraftClient.Protocol.Handlers
             int protocolVersionLocal = 0;
             string version = "";
             
-            TcpClient tcp = ProxyHandler.newTcpClient(host, port).Result;
-            if (tcp == null)
+            var tcpResult = ProxyHandler.newTcpClient(host, port).Result;
+            if (tcpResult.IsFailed)
                 return Result.Fail("TcpClient failed to connect");
+            var tcp = tcpResult.Value;
+            
             tcp.ReceiveTimeout = 30000; // 30 seconds
             tcp.ReceiveBufferSize = 1024 * 1024;
             SocketWrapper socketWrapper = new SocketWrapper(tcp);

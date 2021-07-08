@@ -30,7 +30,7 @@ namespace MinecraftClient
     ///  - Mark new version as handled (see ProtocolHandler.cs)
     ///  - Update MCHighestVersion field below (for versionning)
     /// </remarks>
-    static class Program
+    static partial class Program
     {
         private static McClient client;
         private static CancellationTokenSource clientCancellationToken = new();
@@ -197,6 +197,9 @@ namespace MinecraftClient
 
                 startupargs = args;
                 await InitializeClient();
+
+                // Keep the program alive
+                await Task.Delay(-1, CancellationToken.None);
             }
         }
 
@@ -220,12 +223,13 @@ namespace MinecraftClient
         /// Start a new Client
         /// </summary>
         private static async Task InitializeClient() {
-            var session = await GetSession();
+            var session = await SessionDispatcher.GetSession();
+            
             if (session.IsFailed)
-                HandleFailure(session.Errors[0].Message, false, ChatBot.DisconnectReason.LoginRejected);
+                HandleFailure(session.Errors.First().Message, false, ChatBot.DisconnectReason.LoginRejected);
 
-            var validSession = session.Value.sessionToken;
-
+            var validSession = session.Value;
+            
             Settings.Username = validSession.PlayerName;
             bool isRealms = false;
 
@@ -287,141 +291,14 @@ namespace MinecraftClient
                 Settings.SetServerIP(addressInput);
             }
 
-            //Get server version
-            int protocolversion = 0;
-            ForgeInfo forgeInfo = null;
+            var clientResult = await ClientDispatcher.CreateClient(validSession.PlayerName, validSession.PlayerID, validSession.ID);
+            if (clientResult.IsFailed)
+                throw new NotImplementedException();
 
-            if (Settings.ServerVersion != "" && Settings.ServerVersion.ToLower() != "auto") {
-                protocolversion = Protocol.ProtocolHandler.MCVer2ProtocolVersion(Settings.ServerVersion);
+            client = clientResult.Value;
 
-                if (protocolversion != 0) {
-                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.use_version", Settings.ServerVersion,
-                        protocolversion));
-                }
-                else ConsoleIO.WriteLineFormatted(Translations.Get("mcc.unknown_version", Settings.ServerVersion));
-
-                if (useMcVersionOnce) {
-                    useMcVersionOnce = false;
-                    Settings.ServerVersion = "";
-                }
-            }
-
-            //Retrieve server info if version is not manually set OR if need to retrieve Forge information
-            if (!isRealms && (protocolversion == 0 || Settings.ServerAutodetectForge ||
-                              (Settings.ServerForceForge && !ProtocolHandler.ProtocolMayForceForge(protocolversion)))) {
-                if (protocolversion != 0)
-                    Translations.WriteLine("mcc.forge");
-                else Translations.WriteLine("mcc.retrieve");
-                var serverInfo = await ProtocolHandler.GetServerInfo(Settings.ServerIP, Settings.ServerPort);
-                if (serverInfo.IsFailed) {
-                    HandleFailure(Translations.Get("error.ping"), true,
-                        ChatBots.AutoRelog.DisconnectReason.ConnectionLost);
-                    return;
-                }
-
-                if (serverInfo.Value.ProtocolVersion != 0 && protocolversion != 0 &&
-                    serverInfo.Value.ProtocolVersion != protocolversion)
-                    Translations.WriteLineFormatted("error.version_different");
-                if (serverInfo.Value.ProtocolVersion == 0 && protocolversion != 0)
-                    Translations.WriteLineFormatted("error.no_version_report");
-
-                protocolversion = serverInfo.Value.ProtocolVersion;
-            }
-
-            //Force-enable Forge support?
-            if (!isRealms && Settings.ServerForceForge && forgeInfo == null) {
-                if (ProtocolHandler.ProtocolMayForceForge(protocolversion)) {
-                    Translations.WriteLine("mcc.forgeforce");
-                    forgeInfo = ProtocolHandler.ProtocolForceForge(protocolversion);
-                }
-                else {
-                    HandleFailure(Translations.Get("error.forgeforce"), true,
-                        ChatBots.AutoRelog.DisconnectReason.ConnectionLost);
-                    return;
-                }
-            }
-
-            //Proceed to server login
-            if (protocolversion != 0) {
-                //Start the main TCP client
-                if (Settings.SingleCommand != "") {
-                    client = new McClient(validSession.PlayerName, validSession.PlayerID, validSession.ID, Settings.ServerIP,
-                        Settings.ServerPort, protocolversion, forgeInfo, Settings.SingleCommand,
-                        clientCancellationToken.Token);
-                }
-                else
-                    client = new McClient(validSession.PlayerName, validSession.PlayerID, validSession.ID, protocolversion, forgeInfo,
-                        Settings.ServerIP, Settings.ServerPort, clientCancellationToken.Token);
-
-                //Update console title
-                if (Settings.ConsoleTitle != "")
-                    Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
-            }
-
-
-            try {
-                // Keep the program alive
-                await Task.Delay(-1, clientCancellationToken.Token);
-            }
-            catch (TaskCanceledException) { }
-        }
-
-        public static async Task<Result<Session>> GetSession() {
-            SessionToken session = new SessionToken();
-            ProtocolHandler.LoginResult result = ProtocolHandler.LoginResult.LoginRequired;
-            
-            if (Settings.Password == "-") {
-                Translations.WriteLineFormatted("mcc.offline");
-                result = ProtocolHandler.LoginResult.Success;
-                session.PlayerID = "0";
-                session.PlayerName = Settings.Login;
-            }
-            else {
-                // Validate cached session or login new session.
-                if (Settings.SessionCaching != CacheType.None && SessionCache.Contains(Settings.Login.ToLower())) {
-                    session = SessionCache.Get(Settings.Login.ToLower());
-                    result = ProtocolHandler.GetTokenValidation(session);
-                    if (result != ProtocolHandler.LoginResult.Success) {
-                        Translations.WriteLineFormatted("mcc.session_invalid");
-                        if (Settings.Password == "")
-                            RequestPassword();
-                    }
-                    else ConsoleIO.WriteLineFormatted(Translations.Get("mcc.session_valid", session.PlayerName));
-                }
-
-                if (result != ProtocolHandler.LoginResult.Success) {
-                    Translations.WriteLine("mcc.connecting",
-                        Settings.AccountType == ProtocolHandler.AccountType.Mojang ? "Minecraft.net" : "Microsoft");
-                    result = ProtocolHandler.GetLogin(Settings.Login, Settings.Password, Settings.AccountType,
-                        out session);
-
-                    if (result == ProtocolHandler.LoginResult.Success && Settings.SessionCaching != CacheType.None) {
-                        SessionCache.Store(Settings.Login.ToLower(), session);
-                    }
-                }
-            }
-
-            if (result == ProtocolHandler.LoginResult.Success)
-                return Result.Ok(new Session(ProtocolHandler.LoginResult.Success, session));
-
-            string failureMessage = Translations.Get("error.login");
-            string failureReason = "";
-
-            switch (result) {
-                case ProtocolHandler.LoginResult.AccountMigrated: failureReason = "error.login.migrated"; break;
-                case ProtocolHandler.LoginResult.ServiceUnavailable: failureReason = "error.login.server"; break;
-                case ProtocolHandler.LoginResult.WrongPassword: failureReason = "error.login.blocked"; break;
-                case ProtocolHandler.LoginResult.InvalidResponse: failureReason = "error.login.response"; break;
-                case ProtocolHandler.LoginResult.NotPremium: failureReason = "error.login.premium"; break;
-                case ProtocolHandler.LoginResult.OtherError: failureReason = "error.login.network"; break;
-                case ProtocolHandler.LoginResult.SSLError: failureReason = "error.login.ssl"; break;
-                case ProtocolHandler.LoginResult.UserCancel: failureReason = "error.login.cancel"; break;
-                default: failureReason = "error.login.unknown"; break;
-            }
-
-            failureMessage += Translations.Get(failureReason);
-
-            return Result.Fail(failureMessage);
+            await client.ConnectToServer(Settings.ServerIP, Settings.ServerPort);
+            await client.BeginInteraction();
         }
 
         /// <summary>
@@ -600,15 +477,6 @@ namespace MinecraftClient
                 .FirstOrDefault() as AssemblyConfigurationAttribute;
             if (attribute != null)
                 BuildInfo = attribute.Configuration;
-        }
-
-        public struct Session {
-            public SessionToken sessionToken;
-            public ProtocolHandler.LoginResult loginResult;
-            public Session(ProtocolHandler.LoginResult loginResult, SessionToken sessionToken) {
-                this.loginResult = loginResult;
-                this.sessionToken = sessionToken;
-            }
         }
     }
 }
