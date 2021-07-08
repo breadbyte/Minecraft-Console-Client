@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentResults;
 using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Protocol.Session;
 using MinecraftClient.WinAPI;
@@ -29,7 +30,7 @@ namespace MinecraftClient
     ///  - Mark new version as handled (see ProtocolHandler.cs)
     ///  - Update MCHighestVersion field below (for versionning)
     /// </remarks>
-    static class Program
+    static partial class Program
     {
         private static McClient client;
         private static CancellationTokenSource clientCancellationToken = new();
@@ -196,6 +197,9 @@ namespace MinecraftClient
 
                 startupargs = args;
                 await InitializeClient();
+
+                // Keep the program alive
+                await Task.Delay(-1, CancellationToken.None);
             }
         }
 
@@ -218,214 +222,83 @@ namespace MinecraftClient
         /// <summary>
         /// Start a new Client
         /// </summary>
-        private static async Task InitializeClient()
-        {
-            SessionToken session = new SessionToken();
+        private static async Task InitializeClient() {
+            var session = await SessionDispatcher.GetSession();
+            
+            if (session.IsFailed)
+                HandleFailure(session.Errors.First().Message, false, ChatBot.DisconnectReason.LoginRejected);
 
-            ProtocolHandler.LoginResult result = ProtocolHandler.LoginResult.LoginRequired;
+            var validSession = session.Value;
+            
+            Settings.Username = validSession.PlayerName;
+            bool isRealms = false;
 
-            if (Settings.Password == "-")
-            {
-                Translations.WriteLineFormatted("mcc.offline");
-                result = ProtocolHandler.LoginResult.Success;
-                session.PlayerID = "0";
-                session.PlayerName = Settings.Login;
-            }
-            else
-            {
-                // Validate cached session or login new session.
-                if (Settings.SessionCaching != CacheType.None && SessionCache.Contains(Settings.Login.ToLower()))
-                {
-                    session = SessionCache.Get(Settings.Login.ToLower());
-                    result = ProtocolHandler.GetTokenValidation(session);
-                    if (result != ProtocolHandler.LoginResult.Success)
-                    {
-                        Translations.WriteLineFormatted("mcc.session_invalid");
-                        if (Settings.Password == "")
-                            RequestPassword();
-                    }
-                    else ConsoleIO.WriteLineFormatted(Translations.Get("mcc.session_valid", session.PlayerName));
-                }
+            if (Settings.ConsoleTitle != "")
+                Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
 
-                if (result != ProtocolHandler.LoginResult.Success)
-                {
-                    Translations.WriteLine("mcc.connecting", Settings.AccountType == ProtocolHandler.AccountType.Mojang ? "Minecraft.net" : "Microsoft");
-                    result = ProtocolHandler.GetLogin(Settings.Login, Settings.Password, Settings.AccountType, out session);
+            if (Settings.playerHeadAsIcon)
+                ConsoleIcon.setPlayerIconAsync(Settings.Username);
 
-                    if (result == ProtocolHandler.LoginResult.Success && Settings.SessionCaching != CacheType.None)
-                    {
-                        SessionCache.Store(Settings.Login.ToLower(), session);
-                    }
-                }
-            }
+            if (Settings.DebugMessages)
+                Translations.WriteLine("debug.session_id", validSession.ID);
 
-            if (result == ProtocolHandler.LoginResult.Success)
-            {
-                Settings.Username = session.PlayerName;
-                bool isRealms = false;
+            List<string> availableWorlds = new List<string>();
+            if (Settings.MinecraftRealmsEnabled && !String.IsNullOrEmpty(validSession.ID))
+                availableWorlds = ProtocolHandler.RealmsListWorlds(Settings.Username, validSession.PlayerID, validSession.ID);
 
-                if (Settings.ConsoleTitle != "")
-                    Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
+            if (Settings.ServerIP == "") {
+                Translations.Write("mcc.ip");
+                string addressInput = Console.ReadLine();
+                if (addressInput.StartsWith("realms:")) {
+                    if (Settings.MinecraftRealmsEnabled) {
+                        if (availableWorlds.Count == 0) {
+                            HandleFailure(Translations.Get("error.realms.access_denied"), false,
+                                ChatBot.DisconnectReason.LoginRejected);
+                            return;
+                        }
 
-                if (Settings.playerHeadAsIcon)
-                    ConsoleIcon.setPlayerIconAsync(Settings.Username);
-
-                if (Settings.DebugMessages)
-                    Translations.WriteLine("debug.session_id", session.ID);
-
-                List<string> availableWorlds = new List<string>();
-                if (Settings.MinecraftRealmsEnabled && !String.IsNullOrEmpty(session.ID))
-                    availableWorlds = ProtocolHandler.RealmsListWorlds(Settings.Username, session.PlayerID, session.ID);
-
-                if (Settings.ServerIP == "")
-                {
-                    Translations.Write("mcc.ip");
-                    string addressInput = Console.ReadLine();
-                    if (addressInput.StartsWith("realms:"))
-                    {
-                        if (Settings.MinecraftRealmsEnabled)
-                        {
-                            if (availableWorlds.Count == 0)
-                            {
-                                HandleFailure(Translations.Get("error.realms.access_denied"), false, ChatBot.DisconnectReason.LoginRejected);
-                                return;
+                        int worldIndex = 0;
+                        string worldId = addressInput.Split(':')[1];
+                        if (!availableWorlds.Contains(worldId) && int.TryParse(worldId, out worldIndex) &&
+                            worldIndex < availableWorlds.Count)
+                            worldId = availableWorlds[worldIndex];
+                        if (availableWorlds.Contains(worldId)) {
+                            string RealmsAddress = ProtocolHandler.GetRealmsWorldServerAddress(worldId,
+                                Settings.Username, validSession.PlayerID, validSession.ID);
+                            if (RealmsAddress != "") {
+                                addressInput = RealmsAddress;
+                                isRealms = true;
+                                Settings.ServerVersion = MCHighestVersion;
                             }
-                            int worldIndex = 0;
-                            string worldId = addressInput.Split(':')[1];
-                            if (!availableWorlds.Contains(worldId) && int.TryParse(worldId, out worldIndex) && worldIndex < availableWorlds.Count)
-                                worldId = availableWorlds[worldIndex];
-                            if (availableWorlds.Contains(worldId))
-                            {
-                                string RealmsAddress = ProtocolHandler.GetRealmsWorldServerAddress(worldId, Settings.Username, session.PlayerID, session.ID);
-                                if (RealmsAddress != "")
-                                {
-                                    addressInput = RealmsAddress;
-                                    isRealms = true;
-                                    Settings.ServerVersion = MCHighestVersion;
-                                }
-                                else
-                                {
-                                    HandleFailure(Translations.Get("error.realms.server_unavailable"), false, ChatBot.DisconnectReason.LoginRejected);
-                                    return;
-                                }
-                            }
-                            else
-                            {
-                                HandleFailure(Translations.Get("error.realms.server_id"), false, ChatBot.DisconnectReason.LoginRejected);
+                            else {
+                                HandleFailure(Translations.Get("error.realms.server_unavailable"), false,
+                                    ChatBot.DisconnectReason.LoginRejected);
                                 return;
                             }
                         }
-                        else
-                        {
-                            HandleFailure(Translations.Get("error.realms.disabled"), false, null);
+                        else {
+                            HandleFailure(Translations.Get("error.realms.server_id"), false,
+                                ChatBot.DisconnectReason.LoginRejected);
                             return;
                         }
                     }
-                    Settings.SetServerIP(addressInput);
-                }
-
-                //Get server version
-                int protocolversion = 0;
-                ForgeInfo forgeInfo = null;
-
-                if (Settings.ServerVersion != "" && Settings.ServerVersion.ToLower() != "auto")
-                {
-                    protocolversion = Protocol.ProtocolHandler.MCVer2ProtocolVersion(Settings.ServerVersion);
-
-                    if (protocolversion != 0)
-                    {
-                        ConsoleIO.WriteLineFormatted(Translations.Get("mcc.use_version", Settings.ServerVersion, protocolversion));
-                    }
-                    else ConsoleIO.WriteLineFormatted(Translations.Get("mcc.unknown_version", Settings.ServerVersion));
-
-                    if (useMcVersionOnce)
-                    {
-                        useMcVersionOnce = false;
-                        Settings.ServerVersion = "";
-                    }
-                }
-
-                //Retrieve server info if version is not manually set OR if need to retrieve Forge information
-                if (!isRealms && (protocolversion == 0 || Settings.ServerAutodetectForge || (Settings.ServerForceForge && !ProtocolHandler.ProtocolMayForceForge(protocolversion))))
-                {
-                    if (protocolversion != 0)
-                        Translations.WriteLine("mcc.forge");
-                    else Translations.WriteLine("mcc.retrieve");
-                    var serverInfo = await ProtocolHandler.GetServerInfo(Settings.ServerIP, Settings.ServerPort);
-                    if (serverInfo.IsFailed) {
-                        HandleFailure(Translations.Get("error.ping"), true, ChatBots.AutoRelog.DisconnectReason.ConnectionLost);
-                        return;
-                    }
-                    
-                    if (serverInfo.Value.ProtocolVersion != 0 && protocolversion != 0 && serverInfo.Value.ProtocolVersion != protocolversion )
-                        Translations.WriteLineFormatted("error.version_different");
-                    if (serverInfo.Value.ProtocolVersion == 0 && protocolversion != 0)
-                        Translations.WriteLineFormatted("error.no_version_report");
-
-                    protocolversion = serverInfo.Value.ProtocolVersion;
-                }
-
-                //Force-enable Forge support?
-                if (!isRealms && Settings.ServerForceForge && forgeInfo == null)
-                {
-                    if (ProtocolHandler.ProtocolMayForceForge(protocolversion))
-                    {
-                        Translations.WriteLine("mcc.forgeforce");
-                        forgeInfo = ProtocolHandler.ProtocolForceForge(protocolversion);
-                    }
-                    else
-                    {
-                        HandleFailure(Translations.Get("error.forgeforce"), true, ChatBots.AutoRelog.DisconnectReason.ConnectionLost);
+                    else {
+                        HandleFailure(Translations.Get("error.realms.disabled"), false, null);
                         return;
                     }
                 }
 
-                //Proceed to server login
-                if (protocolversion != 0) {
-                    //Start the main TCP client
-                    if (Settings.SingleCommand != "") {
-                        client = new McClient(session.PlayerName, session.PlayerID, session.ID, Settings.ServerIP, Settings.ServerPort, protocolversion, forgeInfo, Settings.SingleCommand, clientCancellationToken.Token);
-                    }
-                    else
-                        client = new McClient(session.PlayerName, session.PlayerID, session.ID, protocolversion, forgeInfo, Settings.ServerIP, Settings.ServerPort, clientCancellationToken.Token);
-
-                    //Update console title
-                    if (Settings.ConsoleTitle != "")
-                        Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
-                }
-                else HandleFailure(Translations.Get("error.determine"), true);
-            }
-            else
-            {
-                string failureMessage = Translations.Get("error.login");
-                string failureReason = "";
-                switch (result)
-                {
-                    case ProtocolHandler.LoginResult.AccountMigrated: failureReason = "error.login.migrated"; break;
-                    case ProtocolHandler.LoginResult.ServiceUnavailable: failureReason = "error.login.server"; break;
-                    case ProtocolHandler.LoginResult.WrongPassword: failureReason = "error.login.blocked"; break;
-                    case ProtocolHandler.LoginResult.InvalidResponse: failureReason = "error.login.response"; break;
-                    case ProtocolHandler.LoginResult.NotPremium: failureReason = "error.login.premium"; break;
-                    case ProtocolHandler.LoginResult.OtherError: failureReason = "error.login.network"; break;
-                    case ProtocolHandler.LoginResult.SSLError: failureReason = "error.login.ssl"; break;
-                    case ProtocolHandler.LoginResult.UserCancel: failureReason = "error.login.cancel"; break;
-                    default: failureReason = "error.login.unknown"; break;
-                }
-                failureMessage += Translations.Get(failureReason);
-
-                if (result == ProtocolHandler.LoginResult.SSLError && isUsingMono)
-                {
-                    Translations.WriteLineFormatted("error.login.ssl_help");
-                    return;
-                }
-                HandleFailure(failureMessage, false, ChatBot.DisconnectReason.LoginRejected);
+                Settings.SetServerIP(addressInput);
             }
 
-            try {
-                // Keep the program alive
-                await Task.Delay(-1, clientCancellationToken.Token);
-            }
-            catch (TaskCanceledException) { }
+            var clientResult = await ClientDispatcher.CreateClient(validSession.PlayerName, validSession.PlayerID, validSession.ID);
+            if (clientResult.IsFailed)
+                throw new NotImplementedException();
+
+            client = clientResult.Value;
+
+            await client.ConnectToServer(Settings.ServerIP, Settings.ServerPort);
+            await client.BeginInteraction();
         }
 
         /// <summary>

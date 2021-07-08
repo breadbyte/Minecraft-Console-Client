@@ -9,6 +9,7 @@ using System.IO;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using FluentResults;
 using MinecraftClient.ChatBots;
 using MinecraftClient.Protocol;
 using MinecraftClient.Proxy;
@@ -16,6 +17,7 @@ using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Mapping;
 using MinecraftClient.Inventory;
 using MinecraftClient.Logger;
+using MinecraftClient.Protocol.Session;
 using Sentry;
 
 namespace MinecraftClient
@@ -63,13 +65,9 @@ namespace MinecraftClient
         private float playerYaw;
         private float playerPitch;
         private double motionY;
-
-        private string host;
-        private int port;
-        private int protocolversion;
-        private string username;
-        private string uuid;
-        private string sessionid;
+        
+        private ServerInfo serverInfo;
+        private SessionToken playerSession;
         private DateTime lastKeepAlive;
         private object lastKeepAliveLock = new object();
         private int respawnTicks = 0;
@@ -102,11 +100,12 @@ namespace MinecraftClient
         // ChatBot OnNetworkPacket event
         private bool networkPacketCaptureEnabled = false;
 
-        public int GetServerPort() { return port; }
-        public string GetServerHost() { return host; }
-        public string GetUsername() { return username; }
-        public string GetUserUUID() { return uuid; }
-        public string GetSessionID() { return sessionid; }
+        public int GetServerPort() { return serverInfo.Port; }
+        public string GetServerHost() { return serverInfo.ServerIP; }
+        public int GetProtocolVersion() { return serverInfo.ProtocolVersion; }
+        public string GetUsername() { return playerSession.PlayerName; }
+        public string GetUserUUID() { return playerSession.PlayerID; }
+        public string GetSessionID() { return playerSession.ID; }
         public Location GetCurrentLocation() { return location; }
         public float GetYaw() { return playerYaw; }
         public float GetPitch() { return playerPitch; }
@@ -119,15 +118,15 @@ namespace MinecraftClient
         public byte GetCurrentSlot() { return CurrentSlot; }
         public int GetGamemode() { return gamemode; }
         public bool GetNetworkPacketCaptureEnabled() { return networkPacketCaptureEnabled; }
-        public int GetProtocolVersion() { return protocolversion; }
         public ILogger GetLogger() { return this.Log; }
         public int GetPlayerEntityID() { return playerEntityID; }
         public List<ChatBot> GetLoadedChatBots() { return new List<ChatBot>(bots); }
 
-        TcpClient client;
-        IMinecraftCom handler;
+        TcpClient? sessionClient;
+        IMinecraftCom? handler;
         Tuple<Task, CancellationTokenSource>? cmdprompt = null;
         Tuple<Task, CancellationTokenSource>? timeoutdetector = null;
+        private CancellationToken cancel;
 
         public ILogger Log;
 
@@ -140,24 +139,9 @@ namespace MinecraftClient
         /// <param name="server_ip">The server IP</param>
         /// <param name="port">The server port to use</param>
         /// <param name="protocolversion">Minecraft protocol version to use</param>
-        public McClient(string username, string uuid, string sessionID, int protocolversion, ForgeInfo forgeInfo, string server_ip, ushort port, CancellationToken cancellationToken)
+        public McClient(SessionToken session, CancellationToken cancellationToken)
         {
-            Task.Factory.StartNew(async () => await StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, false, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-
-        /// <summary>
-        /// Starts the main chat client in single command sending mode
-        /// </summary>
-        /// <param name="username">The chosen username of a premium Minecraft Account</param>
-        /// <param name="uuid">The player's UUID for online-mode authentication</param>
-        /// <param name="sessionID">A valid sessionID obtained after logging in</param>
-        /// <param name="server_ip">The server IP</param>
-        /// <param name="port">The server port to use</param>
-        /// <param name="protocolversion">Minecraft protocol version to use</param>
-        /// <param name="command">The text or command to send.</param>
-        public McClient(string username, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, string command, CancellationToken cancellationToken)
-        {
-            Task.Factory.StartNew(async () => await StartClient(username, uuid, sessionID, server_ip, port, protocolversion, forgeInfo, true, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            Task.Factory.StartNew(async () => await StartClient(session, false, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         /// <summary>
@@ -171,19 +155,14 @@ namespace MinecraftClient
         /// <param name="uuid">The player's UUID for online-mode authentication</param>
         /// <param name="singlecommand">If set to true, the client will send a single command and then disconnect from the server</param>
         /// <param name="command">The text or command to send. Will only be sent if singlecommand is set to true.</param>
-        private async Task StartClient(string user, string uuid, string sessionID, string server_ip, ushort port, int protocolversion, ForgeInfo forgeInfo, bool singlecommand, string command, CancellationToken cancellationToken)
-        {
+        private async Task StartClient(SessionToken session, bool singlecommand, string command, CancellationToken cancellationToken) {
+            playerSession = session;
+            
             terrainAndMovementsEnabled = Settings.TerrainAndMovements;
             inventoryHandlingEnabled = Settings.InventoryHandling;
             entityHandlingEnabled = Settings.EntityHandling;
 
             bool retry = false;
-            this.sessionid = sessionID;
-            this.uuid = uuid;
-            this.username = user;
-            this.host = server_ip;
-            this.port = port;
-            this.protocolversion = protocolversion;
 
             this.Log = Settings.LogToFile 
                 ? new FileLogLogger(Settings.ExpandVars(Settings.LogFile), Settings.PrependTimestamp) 
@@ -195,119 +174,162 @@ namespace MinecraftClient
             Log.ErrorEnabled = Settings.ErrorMessages;
 
             if (!singlecommand)
-            {
                 /* Load commands from Commands namespace */
                 LoadCommands();
+        }
 
-                if (botsOnHold.Count == 0)
-                {
-                    if (Settings.AntiAFK_Enabled) { BotLoad(new ChatBots.AntiAFK(Settings.AntiAFK_Delay)); }
-                    if (Settings.Hangman_Enabled) { BotLoad(new ChatBots.HangmanGame(Settings.Hangman_English)); }
-                    if (Settings.Alerts_Enabled) { BotLoad(new ChatBots.Alerts()); }
-                    if (Settings.ChatLog_Enabled) { BotLoad(new ChatBots.ChatLog(Settings.ExpandVars(Settings.ChatLog_File), Settings.ChatLog_Filter, Settings.ChatLog_DateTime)); }
-                    if (Settings.PlayerLog_Enabled) { BotLoad(new ChatBots.PlayerListLogger(Settings.PlayerLog_Delay, Settings.ExpandVars(Settings.PlayerLog_File))); }
-                    if (Settings.AutoRelog_Enabled) { BotLoad(new ChatBots.AutoRelog(Settings.AutoRelog_Delay_Min, Settings.AutoRelog_Delay_Max, Settings.AutoRelog_Retries)); }
-                    if (Settings.ScriptScheduler_Enabled) { BotLoad(new ChatBots.ScriptScheduler(Settings.ExpandVars(Settings.ScriptScheduler_TasksFile))); }
-                    if (Settings.RemoteCtrl_Enabled) { BotLoad(new ChatBots.RemoteControl()); }
-                    if (Settings.AutoRespond_Enabled) { BotLoad(new ChatBots.AutoRespond(Settings.AutoRespond_Matches)); }
-                    if (Settings.AutoAttack_Enabled) { BotLoad(new ChatBots.AutoAttack(Settings.AutoAttack_Mode, Settings.AutoAttack_Priority, Settings.AutoAttack_OverrideAttackSpeed, Settings.AutoAttack_CooldownSeconds)); }
-                    if (Settings.AutoFishing_Enabled) { BotLoad(new ChatBots.AutoFishing()); }
-                    if (Settings.AutoEat_Enabled) { BotLoad(new ChatBots.AutoEat(Settings.AutoEat_hungerThreshold)); }
-                    if (Settings.Mailer_Enabled) { BotLoad(new ChatBots.Mailer()); }
-                    if (Settings.AutoCraft_Enabled) { BotLoad(new AutoCraft(Settings.AutoCraft_configFile)); }
-                    if (Settings.AutoDrop_Enabled) { BotLoad(new AutoDrop(Settings.AutoDrop_Mode, Settings.AutoDrop_items)); }
-                    if (Settings.ReplayMod_Enabled) { BotLoad(new ReplayCapture(Settings.ReplayMod_BackupInterval)); }
+        public async Task LoadBots() {
+            if (botsOnHold.Count == 0)
+            {
+                if (Settings.AntiAFK_Enabled) { BotLoad(new ChatBots.AntiAFK(Settings.AntiAFK_Delay)); }
+                if (Settings.Hangman_Enabled) { BotLoad(new ChatBots.HangmanGame(Settings.Hangman_English)); }
+                if (Settings.Alerts_Enabled) { BotLoad(new ChatBots.Alerts()); }
+                if (Settings.ChatLog_Enabled) { BotLoad(new ChatBots.ChatLog(Settings.ExpandVars(Settings.ChatLog_File), Settings.ChatLog_Filter, Settings.ChatLog_DateTime)); }
+                if (Settings.PlayerLog_Enabled) { BotLoad(new ChatBots.PlayerListLogger(Settings.PlayerLog_Delay, Settings.ExpandVars(Settings.PlayerLog_File))); }
+                if (Settings.AutoRelog_Enabled) { BotLoad(new ChatBots.AutoRelog(Settings.AutoRelog_Delay_Min, Settings.AutoRelog_Delay_Max, Settings.AutoRelog_Retries)); }
+                if (Settings.ScriptScheduler_Enabled) { BotLoad(new ChatBots.ScriptScheduler(Settings.ExpandVars(Settings.ScriptScheduler_TasksFile))); }
+                if (Settings.RemoteCtrl_Enabled) { BotLoad(new ChatBots.RemoteControl()); }
+                if (Settings.AutoRespond_Enabled) { BotLoad(new ChatBots.AutoRespond(Settings.AutoRespond_Matches)); }
+                if (Settings.AutoAttack_Enabled) { BotLoad(new ChatBots.AutoAttack(Settings.AutoAttack_Mode, Settings.AutoAttack_Priority, Settings.AutoAttack_OverrideAttackSpeed, Settings.AutoAttack_CooldownSeconds)); }
+                if (Settings.AutoFishing_Enabled) { BotLoad(new ChatBots.AutoFishing()); }
+                if (Settings.AutoEat_Enabled) { BotLoad(new ChatBots.AutoEat(Settings.AutoEat_hungerThreshold)); }
+                if (Settings.Mailer_Enabled) { BotLoad(new ChatBots.Mailer()); }
+                if (Settings.AutoCraft_Enabled) { BotLoad(new AutoCraft(Settings.AutoCraft_configFile)); }
+                if (Settings.AutoDrop_Enabled) { BotLoad(new AutoDrop(Settings.AutoDrop_Mode, Settings.AutoDrop_items)); }
+                if (Settings.ReplayMod_Enabled) { BotLoad(new ReplayCapture(Settings.ReplayMod_BackupInterval)); }
 
-                    //Add your ChatBot here by uncommenting and adapting
-                    //BotLoad(new ChatBots.YourBot());
+                //Add your ChatBot here by uncommenting and adapting
+                //BotLoad(new ChatBots.YourBot());
+            }
+        }
+        
+        public async Task<Result<ServerInfo>> PingServer(string ip, ushort port) {
+            //Get server version
+            int protocolversion = 0; // always 0, optimize
+            ForgeInfo? forgeInfo;
+
+            if (Settings.ServerVersion != "" && Settings.ServerVersion.ToLower() != "auto") {
+                protocolversion = ProtocolHandler.MCVer2ProtocolVersion(Settings.ServerVersion);
+
+                if (protocolversion != 0) {
+                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.use_version", Settings.ServerVersion,
+                        protocolversion));
+                }
+                else ConsoleIO.WriteLineFormatted(Translations.Get("mcc.unknown_version", Settings.ServerVersion));
+            }
+
+            //Retrieve server info if version is not manually set OR if need to retrieve Forge information
+            if (protocolversion == 0 || Settings.ServerAutodetectForge || Settings.ServerForceForge && !ProtocolHandler.ProtocolMayForceForge(protocolversion)) {
+                if (protocolversion != 0)
+                    Translations.WriteLine("mcc.forge");
+                else Translations.WriteLine("mcc.retrieve");
+                var serverInfo = await ProtocolHandler.GetServerInfo(Settings.ServerIP, Settings.ServerPort);
+                if (serverInfo.IsFailed) {
+                    return Result.Fail(new DisconnectError(ChatBot.DisconnectReason.ConnectionLost, Translations.Get("error.ping")));
+                }
+
+                if (serverInfo.Value.ProtocolVersion != 0 && protocolversion != 0 && serverInfo.Value.ProtocolVersion != protocolversion)
+                    Translations.WriteLineFormatted("error.version_different");
+                if (serverInfo.Value.ProtocolVersion == 0 && protocolversion != 0)
+                    Translations.WriteLineFormatted("error.no_version_report");
+
+                protocolversion = serverInfo.Value.ProtocolVersion;
+                return Result.Ok(new ServerInfo(ip, port, serverInfo.Value.ProtocolVersion, serverInfo.Value.ForgeInfo));
+            }
+            
+            return Result.Fail(new DisconnectError(ChatBot.DisconnectReason.ConnectionLost, Translations.Get("error.ping")));
+        }
+
+        public async Task<Result> ConnectToServer(string ip, ushort port, ServerInfo? serverInfo = null) {
+            var tcpInit = await InitTCPClient(ip, port);
+
+            if (tcpInit.IsFailed)
+                return Result.Fail(tcpInit.Errors[0].Message);
+
+            if (serverInfo == null) {
+                var pingResult = await PingServer(ip, port);
+
+                if (pingResult.IsFailed)
+                    return Result.Fail(pingResult.Errors[0].Message);
+
+                serverInfo = pingResult.Value;
+                await LoadBots();
+            }
+
+            //Force-enable Forge support?
+            if (Settings.ServerForceForge && serverInfo.Value.ForgeInfo == null) {
+                if (ProtocolHandler.ProtocolMayForceForge(serverInfo.Value.ProtocolVersion)) {
+                    Translations.WriteLine("mcc.forgeforce");
+                    serverInfo = new ServerInfo(serverInfo.Value.ServerIP, serverInfo.Value.Port, serverInfo.Value.ProtocolVersion,
+                        ProtocolHandler.ProtocolForceForge(serverInfo.Value.ProtocolVersion));
+                }
+                else {
+                    return Result.Fail(new DisconnectError(ChatBot.DisconnectReason.ConnectionLost,
+                        Translations.Get("error.forgeforce")));
                 }
             }
 
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                client = await ProxyHandler.newTcpClient(host, port);
-                if (client == null)
-                    return;
-                client.ReceiveBufferSize = 1024 * 1024;
-                client.ReceiveTimeout = 30000; // 30 seconds
-                handler = ProtocolHandler.GetProtocolHandler(client, protocolversion, forgeInfo, this);
-                if (handler == null)
-                    ConsoleIO.WriteLine($"{Translations.Get("exception.version_unsupport")} {protocolversion}");
-                
-                Log.Info(Translations.Get("mcc.version_supported"));
+            var handlerResult = ProtocolHandler.GetProtocolHandler(sessionClient, serverInfo.Value.ProtocolVersion, serverInfo.Value.ForgeInfo, this);
+            if (handlerResult.IsFailed)
+                return Result.Fail(
+                    $"{Translations.Get("exception.version_unsupport")} {serverInfo.Value.ProtocolVersion}");
 
-                if (!singlecommand) {
-                    CancellationTokenSource cts = new CancellationTokenSource();
-                    var timeoutTask = Task.Factory.StartNew(() => { TimeoutDetector(cts.Token); }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-                    timeoutdetector = new(timeoutTask, cts);
+            this.serverInfo = serverInfo.Value;
+            handler = handlerResult.Value;
+            return Result.Ok(Translations.Get("mcc.version_supported"));
+        }
+
+        public async Task Reconnect() {
+            throw new NotImplementedException();
+        }
+
+        public async Task BeginInteraction() {
+            CancellationTokenSource cancelInteraction = new CancellationTokenSource();
+            var timeoutTask = Task.Factory.StartNew(() => { TimeoutDetector(cancelInteraction.Token); }, cancelInteraction.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            timeoutdetector = new(timeoutTask, cancelInteraction);
+
+            try {
+                if (handler.Login()) {
+                    foreach (ChatBot bot in botsOnHold)
+                        BotLoad(bot, false);
+                    botsOnHold.Clear();
+
+                    Log.Info(Translations.Get("mcc.joined", (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
+
+                    var cmdTask = Task.Factory.StartNew(() => { CommandPrompt(cancelInteraction.Token); }, cancelInteraction.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    cmdprompt = new(cmdTask, cancelInteraction);
                 }
 
-                try
-                {
-                    if (handler.Login()) {
-                        if (singlecommand) {
-                            handler.SendChatMessage(command);
-                            Log.Info(Translations.Get("mcc.single_cmd", command));
-                            Thread.Sleep(5000);
-                            handler.Disconnect();
-                            Thread.Sleep(1000);
-                        }
-                        else {
-                            foreach (ChatBot bot in botsOnHold)
-                                BotLoad(bot, false);
-                            botsOnHold.Clear();
-
-                            Log.Info(Translations.Get("mcc.joined",
-                                (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
-
-                            CancellationTokenSource cts = new CancellationTokenSource();
-                            var cmdTask = Task.Factory.StartNew(() => { CommandPrompt(cts.Token); }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-                            cmdprompt = new(cmdTask, cts);
-                        }
-                    }
-
-                    else
-                    {
-                        Log.Error(Translations.Get("error.login_failed"));
-                        retry = true;
-                    }
-                }
-                catch (Exception e)
-                {
-                    SentrySdk.CaptureException(e);
-                    Log.Error(e.GetType().Name + ": " + e.Message);
-                    Log.Error(Translations.Get("error.join"));
-                    retry = true;
+                else {
+                    Log.Error(Translations.Get("error.login_failed"));
                 }
             }
-            catch (SocketException e)
-            {
+            catch (Exception e) {
                 SentrySdk.CaptureException(e);
-                Log.Error(e.Message);
-                Log.Error(Translations.Get("error.connect"));
-                retry = true;
+                Log.Error(e.GetType().Name + ": " + e.Message);
+                Log.Error(Translations.Get("error.join"));
             }
 
-            if (retry)
-            {
-                if (timeoutdetector != null)
-                {
-                    timeoutdetector.Item2.Cancel();
-                    timeoutdetector = null;
-                }
-                if (ReconnectionAttemptsLeft > 0)
-                {
-                    Log.Info(Translations.Get("mcc.reconnect", ReconnectionAttemptsLeft));
-                    Thread.Sleep(5000);
-                    ReconnectionAttemptsLeft--;
-                    Program.Restart();
-                }
-                else if (!singlecommand && Settings.interactiveMode)
-                {
-                    Program.HandleFailure();
-                }
-            }
+            await Task.Delay(-1, cancel);
+        }
+
+        private async Task<Result> InitTCPClient(string host, ushort port) {
+            // Client is already initialized, no need to do anything more
+            if (sessionClient != null && sessionClient.Connected)
+                return Result.Ok();
+            
+            // Create a new client.
+            var clientResult = await ProxyHandler.newTcpClient(host, port);
+            if (clientResult.IsFailed)
+                return Result.Fail(clientResult.Errors[0].Message);
+
+            var tcpResult = clientResult.Value;
+            
+            tcpResult.ReceiveBufferSize = 1024 * 1024;
+            tcpResult.ReceiveTimeout = 25000; // 25 seconds
+
+            sessionClient = tcpResult;
+            return Result.Ok();
         }
 
         /// <summary>
@@ -454,8 +476,8 @@ namespace MinecraftClient
                 timeoutdetector = null;
             }
 
-            if (client != null)
-                client.Close();
+            if (sessionClient != null)
+                sessionClient.Close();
         }
 
         /// <summary>
@@ -532,7 +554,7 @@ namespace MinecraftClient
             {
                 while (!((CancellationToken) o!).IsCancellationRequested) {
                     Thread.Sleep(500);
-                    while (client.Client.Connected) {
+                    while (sessionClient.Client.Connected) {
                         string text = ConsoleIO.ReadLine();
                         InvokeOnMainThread(() => HandleCommandPromptText(text));
                     }
@@ -2190,7 +2212,7 @@ namespace MinecraftClient
             if (onlinePlayers.ContainsKey(uuid))
             {
                 string playerName = onlinePlayers[uuid];
-                if (playerName == this.username)
+                if (playerName == this.GetUsername())
                     this.gamemode = gamemode;
                 DispatchBotEvent(bot => bot.OnGamemodeUpdate(playerName, uuid, gamemode));
             }
@@ -2518,5 +2540,35 @@ namespace MinecraftClient
         }
 
         #endregion
+
+        private enum ClientState {
+            Disconnected,
+            Connecting,
+            Connected
+        }
+
+        public struct ServerInfo {
+            public string ServerIP;
+            public ushort Port;
+            public int ProtocolVersion;
+            public ForgeInfo? ForgeInfo;
+
+            public ServerInfo(string ip, ushort port, int protocolVersion, ForgeInfo? forgeInfo) {
+                ServerIP = ip;
+                Port = port;
+                ProtocolVersion = protocolVersion;
+                ForgeInfo = forgeInfo;
+            }
+        }
+
+        public class DisconnectError : Error {
+            public ChatBot.DisconnectReason DisconnectReason;
+            public string Reason;
+
+            public DisconnectError(ChatBot.DisconnectReason disconnectReason, string reason) : base() {
+                DisconnectReason = disconnectReason;
+                Reason = reason;
+            }
+        }
     }
 }

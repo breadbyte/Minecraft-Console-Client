@@ -93,9 +93,6 @@ namespace MinecraftClient.Protocol {
             return Result.Ok(protocolResult);
         }
 
-
-
-
         /// <summary>
         /// Get a protocol handler for the specified Minecraft version
         /// </summary>
@@ -103,15 +100,15 @@ namespace MinecraftClient.Protocol {
         /// <param name="ProtocolVersion">Protocol version to handle</param>
         /// <param name="Handler">Handler with the appropriate callbacks</param>
         /// <returns></returns>
-        public static IMinecraftCom? GetProtocolHandler(TcpClient Client, int ProtocolVersion, ForgeInfo forgeInfo, IMinecraftComHandler Handler)
+        public static Result<IMinecraftCom> GetProtocolHandler(TcpClient Client, int ProtocolVersion, ForgeInfo forgeInfo, IMinecraftComHandler Handler)
         {
             int[] supportedVersions_Protocol16 = { 51, 60, 61, 72, 73, 74, 78 };
             if (Array.IndexOf(supportedVersions_Protocol16, ProtocolVersion) > -1)
-                return new Protocol16Handler(Client, ProtocolVersion, Handler);
+                return Result.Ok<IMinecraftCom>(new Protocol16Handler(Client, ProtocolVersion, Handler));
             int[] supportedVersions_Protocol18 = { 4, 5, 47, 107, 108, 109, 110, 210, 315, 316, 335, 338, 340, 393, 401, 404, 477, 480, 485, 490, 498, 573, 575, 578, 735, 736, 751, 753, 754, 755 };
             if (Array.IndexOf(supportedVersions_Protocol18, ProtocolVersion) > -1)
-                return new Protocol18Handler(Client, ProtocolVersion, Handler, forgeInfo);
-            return null;
+                return Result.Ok<IMinecraftCom>(new Protocol18Handler(Client, ProtocolVersion, Handler, forgeInfo));
+            return Result.Fail("Version not supported");
         }
 
         /// <summary>
@@ -325,20 +322,21 @@ namespace MinecraftClient.Protocol {
         /// <param name="pass">Password</param>
         /// <param name="session">In case of successful login, will contain session information for multiplayer</param>
         /// <returns>Returns the status of the login (Success, Failure, etc.)</returns>
-        public static LoginResult GetLogin(string user, string pass, AccountType type, out SessionToken session)
-        {
-            if (type == AccountType.Microsoft)
-            {
-                if (Settings.LoginMethod == "mcc")
-                    return MicrosoftMCCLogin(user, pass, out session);
-                else
-                    return MicrosoftBrowserLogin(out session);
+        public static Result<SessionToken> GetLogin(string user, string pass, AccountType type) {
+            SessionToken s = new SessionToken();
+
+            switch (type) {
+                case AccountType.Microsoft:
+                    if (Settings.LoginMethod == "mcc")
+                        return MicrosoftMCCLogin(user, pass);
+                    else
+                        return MicrosoftBrowserLogin();
+                case AccountType.Mojang:
+                    return MojangLogin(user, pass);
+                    break;
+                default:
+                    throw new NotImplementedException("This account type is not implemented!");
             }
-            else if (type == AccountType.Mojang)
-            {
-                return MojangLogin(user, pass, out session);
-            }
-            else throw new InvalidOperationException("Account type must be Mojang or Microsoft");
         }
 
         /// <summary>
@@ -348,86 +346,45 @@ namespace MinecraftClient.Protocol {
         /// <param name="pass"></param>
         /// <param name="session"></param>
         /// <returns></returns>
-        private static LoginResult MojangLogin(string user, string pass, out SessionToken session)
-        {
-            session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
+        private static Result<SessionToken> MojangLogin(string user, string pass) {
+            var session = new SessionToken() {ClientID = Guid.NewGuid().ToString().Replace("-", "")};
+            string result = "";
+            string json_request = "{\"agent\": { \"name\": \"Minecraft\", \"version\": 1 }, \"username\": \"" +
+                                  JsonEncode(user) + "\", \"password\": \"" + JsonEncode(pass) +
+                                  "\", \"clientToken\": \"" + JsonEncode(session.ClientID) + "\" }";
+            int code = DoHTTPSPost("authserver.mojang.com", "/authenticate", json_request, ref result);
+            if (code == 200) {
+                if (result.Contains("availableProfiles\":[]}")) {
+                    return Result.Fail(new LoginFailure(LoginResult.NotPremium));
+                }
+                else {
+                    Json.JSONData loginResponse = Json.ParseJson(result);
+                    if (loginResponse.Properties.ContainsKey("accessToken")
+                        && loginResponse.Properties.ContainsKey("selectedProfile")
+                        && loginResponse.Properties["selectedProfile"].Properties.ContainsKey("id")
+                        && loginResponse.Properties["selectedProfile"].Properties.ContainsKey("name")) {
+                        session.ID = loginResponse.Properties["accessToken"].StringValue;
+                        session.PlayerID = loginResponse.Properties["selectedProfile"].Properties["id"].StringValue;
+                        session.PlayerName = loginResponse.Properties["selectedProfile"].Properties["name"].StringValue;
+                        return Result.Ok(session);
+                    }
+                    else return Result.Fail(new LoginFailure(LoginResult.InvalidResponse));
+                }
+            }
 
-            try
-            {
-                string result = "";
-                string json_request = "{\"agent\": { \"name\": \"Minecraft\", \"version\": 1 }, \"username\": \"" + JsonEncode(user) + "\", \"password\": \"" + JsonEncode(pass) + "\", \"clientToken\": \"" + JsonEncode(session.ClientID) + "\" }";
-                int code = DoHTTPSPost("authserver.mojang.com", "/authenticate", json_request, ref result);
-                if (code == 200)
-                {
-                    if (result.Contains("availableProfiles\":[]}"))
-                    {
-                        return LoginResult.NotPremium;
-                    }
-                    else
-                    {
-                        Json.JSONData loginResponse = Json.ParseJson(result);
-                        if (loginResponse.Properties.ContainsKey("accessToken")
-                            && loginResponse.Properties.ContainsKey("selectedProfile")
-                            && loginResponse.Properties["selectedProfile"].Properties.ContainsKey("id")
-                            && loginResponse.Properties["selectedProfile"].Properties.ContainsKey("name"))
-                        {
-                            session.ID = loginResponse.Properties["accessToken"].StringValue;
-                            session.PlayerID = loginResponse.Properties["selectedProfile"].Properties["id"].StringValue;
-                            session.PlayerName = loginResponse.Properties["selectedProfile"].Properties["name"].StringValue;
-                            return LoginResult.Success;
-                        }
-                        else return LoginResult.InvalidResponse;
-                    }
+            if (code == 403) {
+                if (result.Contains("UserMigratedException")) {
+                    return Result.Fail(new LoginFailure(LoginResult.AccountMigrated));
                 }
-                else if (code == 403)
-                {
-                    if (result.Contains("UserMigratedException"))
-                    {
-                        return LoginResult.AccountMigrated;
-                    }
-                    else return LoginResult.WrongPassword;
-                }
-                else if (code == 503)
-                {
-                    return LoginResult.ServiceUnavailable;
-                }
-                else
-                {
-                    ConsoleIO.WriteLineFormatted(Translations.Get("error.http_code", code));
-                    return LoginResult.OtherError;
-                }
+                
+                return Result.Fail(new LoginFailure(LoginResult.WrongPassword));
             }
-            catch (System.Security.Authentication.AuthenticationException e)
-            {
-                SentrySdk.CaptureException(e);
-                if (Settings.DebugMessages)
-                {
-                    ConsoleIO.WriteLineFormatted("§8" + e.ToString());
-                }
-                return LoginResult.SSLError;
+
+            if (code == 503) {
+                Result.Fail(new LoginFailure(LoginResult.ServiceUnavailable));
             }
-            catch (System.IO.IOException e)
-            {
-                SentrySdk.CaptureException(e);
-                if (Settings.DebugMessages)
-                {
-                    ConsoleIO.WriteLineFormatted("§8" + e.ToString());
-                }
-                if (e.Message.Contains("authentication"))
-                {
-                    return LoginResult.SSLError;
-                }
-                else return LoginResult.OtherError;
-            }
-            catch (Exception e)
-            {
-                SentrySdk.CaptureException(e);
-                if (Settings.DebugMessages)
-                {
-                    ConsoleIO.WriteLineFormatted("§8" + e.ToString());
-                }
-                return LoginResult.OtherError;
-            }
+
+            return Result.Fail(new LoginFailure(LoginResult.OtherError)).WithReason(new Error(code.ToString()));
         }
 
         /// <summary>
@@ -438,24 +395,21 @@ namespace MinecraftClient.Protocol {
         /// <param name="password"></param>
         /// <param name="session"></param>
         /// <returns></returns>
-        private static LoginResult MicrosoftMCCLogin(string email, string password, out SessionToken session)
-        {
+        private static Result<SessionToken> MicrosoftMCCLogin(string email, string password) {
             var ms = new XboxLive();
             try
             {
                 var msaResponse = ms.UserLogin(email, password, ms.PreAuth());
-                return MicrosoftLogin(msaResponse, out session);
+                return MicrosoftLogin(msaResponse);
             }
             catch (Exception e)
             {
                 SentrySdk.CaptureException(e);
-                session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
-                if (Settings.DebugMessages)
-                {
+                if (Settings.DebugMessages) {
                     ConsoleIO.WriteLineFormatted("§c" + e.StackTrace);
                 }
-                return LoginResult.WrongPassword; // Might not always be wrong password
+                return Result.Fail(new LoginFailure(LoginResult.WrongPassword)); // Might not always be wrong password
             }
         }
 
@@ -469,8 +423,9 @@ namespace MinecraftClient.Protocol {
         /// </remarks>
         /// <param name="session"></param>
         /// <returns></returns>
-        public static LoginResult MicrosoftBrowserLogin(out SessionToken session)
+        public static Result<SessionToken> MicrosoftBrowserLogin()
         {
+            var session = new SessionToken();
             var ms = new XboxLive();
             string[] askOpenLink =
             {
@@ -490,8 +445,7 @@ namespace MinecraftClient.Protocol {
                 string link = ConsoleIO.ReadLine();
                 if (string.IsNullOrEmpty(link))
                 {
-                    session = new SessionToken();
-                    return LoginResult.UserCancel;
+                    return Result.Fail(new LoginFailure(LoginResult.UserCancel));
                 }
                 parts = link.Split('#');
                 if (parts.Length < 2)
@@ -511,7 +465,7 @@ namespace MinecraftClient.Protocol {
             };
             try
             {
-                return MicrosoftLogin(msaResponse, out session);
+                return MicrosoftLogin(msaResponse);
             }
             catch (Exception e)
             {
@@ -522,13 +476,13 @@ namespace MinecraftClient.Protocol {
                 {
                     ConsoleIO.WriteLineFormatted("§c" + e.StackTrace);
                 }
-                return LoginResult.WrongPassword; // Might not always be wrong password
+                return Result.Fail(new LoginFailure(LoginResult.WrongPassword)); // Might not always be wrong password
             }
         }
 
-        private static LoginResult MicrosoftLogin(XboxLive.UserLoginResponse msaResponse, out SessionToken session)
+        private static Result<SessionToken> MicrosoftLogin(XboxLive.UserLoginResponse msaResponse)
         {
-            session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
+            var session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
             var ms = new XboxLive();
             var mc = new MinecraftWithXbox();
 
@@ -545,22 +499,19 @@ namespace MinecraftClient.Protocol {
                     session.PlayerName = profile.UserName;
                     session.PlayerID = profile.UUID;
                     session.ID = accessToken;
-                    return LoginResult.Success;
+                    return Result.Ok(session);
                 }
-                else
-                {
-                    return LoginResult.NotPremium;
-                }
+
+                return Result.Fail(new LoginFailure(LoginResult.NotPremium));
             }
             catch (Exception e)
             {
                 SentrySdk.CaptureException(e);
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
-                if (Settings.DebugMessages)
-                {
+                if (Settings.DebugMessages) {
                     ConsoleIO.WriteLineFormatted("§c" + e.StackTrace);
                 }
-                return LoginResult.WrongPassword; // Might not always be wrong password
+                return Result.Fail(new LoginFailure(LoginResult.WrongPassword)); // Might not always be wrong password
             }
         }
 
@@ -811,8 +762,11 @@ namespace MinecraftClient.Protocol {
                 if (Settings.DebugMessages)
                     ConsoleIO.WriteLineFormatted(Translations.Get("debug.request", host));
 
-                TcpClient client = ProxyHandler.newTcpClient(host, 443, true).Result;
-                SslStream stream = new SslStream(client.GetStream());
+                var clientResult = ProxyHandler.newTcpClient(host, 443, true).Result;
+                if (clientResult.IsFailed)
+                    return 520; //todo handle tcp can't connect
+
+                SslStream stream = new SslStream(clientResult.Value.GetStream());
                 stream.AuthenticateAsClient(host);
 
                 if (Settings.DebugMessages)
