@@ -427,7 +427,7 @@ namespace MinecraftClient.Protocol.Handlers
             else c.Client.Send(buffer);
         }
 
-        private bool Handshake(string uuid, string username, string sessionID, string host, int port)
+        private async Task<bool> Handshake(string uuid, string username, string sessionID, string host, int port)
         {
             //array
             byte[] data = new byte[10 + (username.Length + host.Length) * 2];
@@ -481,7 +481,7 @@ namespace MinecraftClient.Protocol.Handlers
                 else if (Settings.DebugMessages)
                     ConsoleIO.WriteLineFormatted(Translations.Get("mcc.handshake", serverID));
 
-                return StartEncryption(uuid, username, sessionID, token, serverID, PublicServerkey);
+                return await StartEncryption(uuid, username, sessionID, token, serverID, PublicServerkey);
             }
             else
             {
@@ -490,7 +490,7 @@ namespace MinecraftClient.Protocol.Handlers
             }
         }
 
-        private bool StartEncryption(string uuid, string username, string sessionID, byte[] token, string serverIDhash, byte[] serverKey)
+        private async Task<bool> StartEncryption(string uuid, string username, string sessionID, byte[] token, string serverIDhash, byte[] serverKey)
         {
             System.Security.Cryptography.RSACryptoServiceProvider RSAService = CryptoHandler.DecodeRSAPublicKey(serverKey);
             byte[] secretKey = CryptoHandler.GenerateAESPrivateKey();
@@ -501,7 +501,9 @@ namespace MinecraftClient.Protocol.Handlers
             if (serverIDhash != "-")
             {
                 Translations.WriteLine("mcc.session");
-                if (!ProtocolHandler.SessionCheck(uuid, sessionID, CryptoHandler.getServerHash(serverIDhash, serverKey, secretKey)))
+                var checkSession = await ProtocolHandler.SessionCheckAsync(uuid, sessionID, CryptoHandler.getServerHash(serverIDhash, serverKey, secretKey));
+
+                if (checkSession.IsFailed)
                 {
                     handler.OnConnectionLost(ChatBot.DisconnectReason.LoginRejected, Translations.Get("mcc.session_fail"));
                     return false;
@@ -545,9 +547,9 @@ namespace MinecraftClient.Protocol.Handlers
             }
         }
 
-        public bool Login()
+        public async Task<bool> Login()
         {
-            if (Handshake(handler.GetUserUUID(), handler.GetUsername(), handler.GetSessionID(), handler.GetServerHost(), handler.GetServerPort()))
+            if (await Handshake(handler.GetUserUUID(), handler.GetUsername(), handler.GetSessionID(), handler.GetServerHost(), handler.GetServerPort()))
             {
                 Send(new byte[] { 0xCD, 0 });
                 try
@@ -813,7 +815,7 @@ namespace MinecraftClient.Protocol.Handlers
             int protocolVersion;
 
             string version = "";
-            var tcpResult = ProxyHandler.newTcpClient(host, port).Result;
+            var tcpResult = ProxyHandler.CreateTcpClient(host, port).Result;
 
             if (tcpResult.IsFailed)
                 return Result.Fail("TcpClient failed to connect");

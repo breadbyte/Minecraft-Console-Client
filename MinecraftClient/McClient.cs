@@ -289,7 +289,7 @@ namespace MinecraftClient
             timeoutdetector = new(timeoutTask, cancelInteraction);
 
             try {
-                if (handler.Login()) {
+                if (await handler.Login()) {
                     foreach (ChatBot bot in botsOnHold)
                         BotLoad(bot, false);
                     botsOnHold.Clear();
@@ -319,7 +319,7 @@ namespace MinecraftClient
                 return Result.Ok();
             
             // Create a new client.
-            var clientResult = await ProxyHandler.newTcpClient(host, port);
+            var clientResult = await ProxyHandler.CreateTcpClient(host, port);
             if (clientResult.IsFailed)
                 return Result.Fail(clientResult.Errors[0].Message);
 

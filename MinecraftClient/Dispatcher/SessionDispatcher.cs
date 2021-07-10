@@ -52,10 +52,11 @@ namespace MinecraftClient {
 
         private static async Task<Result<SessionToken>> CreateYggdrasilSession() {
             Translations.WriteLine("mcc.connecting", Settings.AccountType == ProtocolHandler.AccountType.Mojang ? "Minecraft.net" : "Microsoft");
-            var result = ProtocolHandler.GetLogin(Settings.Login, Settings.Password, Settings.AccountType);
+            var result = await ProtocolHandler.GetLogin(Settings.Login, Settings.Password, Settings.AccountType);
             
             if (result.IsSuccess && Settings.SessionCaching != CacheType.None) {
                 SessionCache.Store(Settings.Login.ToLower(), result.Value);
+                return result;
             }
 
             return result;
@@ -64,9 +65,9 @@ namespace MinecraftClient {
         private static async Task<Result<SessionToken>> GetCachedSession() {
             if (Settings.SessionCaching != CacheType.None && SessionCache.Contains(Settings.Login.ToLower())) {
                 var session = SessionCache.Get(Settings.Login.ToLower());
-                var result = ProtocolHandler.GetTokenValidation(session);
-                if (result != ProtocolHandler.LoginResult.Success) {
-                    return Result.Fail(Translations.Get("mcc.session_invalid")).WithError(new LoginFailure(result));
+                var result = await ProtocolHandler.GetTokenValidation(session);
+                if (result.Value != ProtocolHandler.LoginResult.Success) {
+                    return Result.Fail(Translations.Get("mcc.session_invalid")).WithError(new LoginFailure(result.Value));
                 }
                 
                 ConsoleIO.WriteLineFormatted(Translations.Get("mcc.session_valid", session.PlayerName));

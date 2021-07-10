@@ -35,7 +35,7 @@ namespace MinecraftClient.Proxy {
         /// <param name="port">Target port</param>
         /// <param name="login">True if the purpose is logging in to a Minecraft account</param>
 
-        public static async Task<Result<TcpClient>> newTcpClient(string host, int port, bool login = false) {
+        public static async Task<Result<TcpClient>> CreateTcpClient(string host, int port, bool login = false) {
             TcpClient? client = null;
             if (login ? Settings.ProxyEnabledLogin : Settings.ProxyEnabledIngame) {
                 ProxyType innerProxytype = ProxyType.Http;

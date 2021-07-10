@@ -116,7 +116,7 @@ namespace MinecraftClient.Protocol
 
             Response response = Response.Empty();
 
-            var clientResult = ProxyHandler.newTcpClient(host, port, true).Result;
+            var clientResult = ProxyHandler.CreateTcpClient(host, port, true).Result;
             if (clientResult.IsFailed)
                 throw new NotImplementedException();
             var client = clientResult.Value;

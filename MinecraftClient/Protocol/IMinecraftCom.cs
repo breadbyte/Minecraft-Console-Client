@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using MinecraftClient.Crypto;
 using MinecraftClient.Mapping;
 using MinecraftClient.Inventory;
@@ -21,7 +22,7 @@ namespace MinecraftClient.Protocol
         /// Start the login procedure once connected to the server
         /// </summary>
         /// <returns>True if login was successful</returns>
-        bool Login();
+        Task<bool> Login();
 
         /// <summary>
         /// Disconnect from the server

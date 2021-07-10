@@ -223,10 +223,13 @@ namespace MinecraftClient
         /// Start a new Client
         /// </summary>
         private static async Task InitializeClient() {
+            RequestPassword(); //todo authenticated clients don't ask for password at all, this makes cracked clients have to enter the password twice 
             var session = await SessionDispatcher.GetSession();
-            
-            if (session.IsFailed)
+
+            if (session.IsFailed) {
                 HandleFailure(session.Errors.First().Message, false, ChatBot.DisconnectReason.LoginRejected);
+                return;
+            }
 
             var validSession = session.Value;
             
@@ -243,8 +246,14 @@ namespace MinecraftClient
                 Translations.WriteLine("debug.session_id", validSession.ID);
 
             List<string> availableWorlds = new List<string>();
-            if (Settings.MinecraftRealmsEnabled && !String.IsNullOrEmpty(validSession.ID))
-                availableWorlds = ProtocolHandler.RealmsListWorlds(Settings.Username, validSession.PlayerID, validSession.ID);
+            if (Settings.MinecraftRealmsEnabled && !String.IsNullOrEmpty(validSession.ID)) {
+                var getRealmsWorld = await ProtocolHandler.RealmsListWorldsAsync(Settings.Username, validSession.PlayerID, validSession.ID);
+                // todo this means we have an internal http error
+                if (getRealmsWorld.IsFailed)
+                    Console.WriteLine(getRealmsWorld.Errors[0].Message);
+                else
+                    availableWorlds = getRealmsWorld.Value;
+            }
 
             if (Settings.ServerIP == "") {
                 Translations.Write("mcc.ip");
@@ -263,17 +272,19 @@ namespace MinecraftClient
                             worldIndex < availableWorlds.Count)
                             worldId = availableWorlds[worldIndex];
                         if (availableWorlds.Contains(worldId)) {
-                            string RealmsAddress = ProtocolHandler.GetRealmsWorldServerAddress(worldId,
-                                Settings.Username, validSession.PlayerID, validSession.ID);
-                            if (RealmsAddress != "") {
-                                addressInput = RealmsAddress;
-                                isRealms = true;
-                                Settings.ServerVersion = MCHighestVersion;
+                            var getRealmsWorldServer = await ProtocolHandler.GetRealmsWorldServerAddressAsync(worldId, Settings.Username, validSession.PlayerID, validSession.ID);
+                            if (getRealmsWorldServer.IsFailed) {
+                                Console.WriteLine(getRealmsWorldServer.Errors[0].Message);
+                                HandleFailure(Translations.Get("error.realms.server_unavailable"), false, ChatBot.DisconnectReason.LoginRejected);
+                                return;
                             }
                             else {
-                                HandleFailure(Translations.Get("error.realms.server_unavailable"), false,
-                                    ChatBot.DisconnectReason.LoginRejected);
-                                return;
+                                string RealmsAddress = getRealmsWorldServer.Value;
+                                if (RealmsAddress != "") {
+                                    addressInput = RealmsAddress;
+                                    isRealms = true;
+                                    Settings.ServerVersion = MCHighestVersion;
+                                }
                             }
                         }
                         else {
