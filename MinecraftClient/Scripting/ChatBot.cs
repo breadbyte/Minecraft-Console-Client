@@ -43,7 +43,7 @@ namespace MinecraftClient
         private List<string> registeredCommands = new List<string>();
         private object delayTasksLock = new object();
         private List<TaskWithDelay> delayedTasks = new List<TaskWithDelay>();
-        private McClient Handler
+        public McClient Handler
         {
             get
             {
@@ -476,7 +476,7 @@ namespace MinecraftClient
         /// <param name="message">if it's a private message, this will contain the message</param>
         /// <param name="sender">if it's a private message, this will contain the player name that sends the message</param>
         /// <returns>Returns true if the text is a private message</returns>
-        protected static bool IsPrivateMessage(string text, ref string message, ref string sender)
+        protected bool IsPrivateMessage(string text, ref string message, ref string sender)
         {
             if (String.IsNullOrEmpty(text))
                 return false;
@@ -484,9 +484,9 @@ namespace MinecraftClient
             text = GetVerbatim(text);
 
             //User-defined regex for private chat messages
-            if (Settings.ChatFormat_Private != null)
+            if (Handler.Settings.ChatFormat_Private != null)
             {
-                Match regexMatch = Settings.ChatFormat_Private.Match(text);
+                Match regexMatch = Handler.Settings.ChatFormat_Private.Match(text);
                 if (regexMatch.Success && regexMatch.Groups.Count >= 3)
                 {
                     sender = regexMatch.Groups[1].Value;
@@ -496,7 +496,7 @@ namespace MinecraftClient
             }
 
             //Built-in detection routine for private messages
-            if (Settings.ChatFormat_Builtins)
+            if (Handler.Settings.ChatFormat_Builtins)
             {
                 string[] tmp = text.Split(' ');
                 try
@@ -587,7 +587,7 @@ namespace MinecraftClient
         /// <param name="message">if it's message, this will contain the message</param>
         /// <param name="sender">if it's message, this will contain the player name that sends the message</param>
         /// <returns>Returns true if the text is a chat message</returns>
-        protected static bool IsChatMessage(string text, ref string message, ref string sender)
+        protected bool IsChatMessage(string text, ref string message, ref string sender)
         {
             if (String.IsNullOrEmpty(text))
                 return false;
@@ -595,9 +595,9 @@ namespace MinecraftClient
             text = GetVerbatim(text);
 
             //User-defined regex for public chat messages
-            if (Settings.ChatFormat_Public != null)
+            if (Handler.Settings.ChatFormat_Public != null)
             {
-                Match regexMatch = Settings.ChatFormat_Public.Match(text);
+                Match regexMatch = Handler.Settings.ChatFormat_Public.Match(text);
                 if (regexMatch.Success && regexMatch.Groups.Count >= 3)
                 {
                     sender = regexMatch.Groups[1].Value;
@@ -607,7 +607,7 @@ namespace MinecraftClient
             }
 
             //Built-in detection routine for public messages
-            if (Settings.ChatFormat_Builtins)
+            if (Handler.Settings.ChatFormat_Builtins)
             {
                 string[] tmp = text.Split(' ');
 
@@ -690,7 +690,7 @@ namespace MinecraftClient
         /// <param name="text">Text to parse</param>
         /// <param name="sender">Will contain the sender's username, if it's a teleport request</param>
         /// <returns>Returns true if the text is a teleport request</returns>
-        protected static bool IsTeleportRequest(string text, ref string sender)
+        protected bool IsTeleportRequest(string text, ref string sender)
         {
             if (String.IsNullOrEmpty(text))
                 return false;
@@ -698,9 +698,9 @@ namespace MinecraftClient
             text = GetVerbatim(text);
 
             //User-defined regex for teleport requests
-            if (Settings.ChatFormat_TeleportRequest != null)
+            if (Handler.Settings.ChatFormat_TeleportRequest != null)
             {
-                Match regexMatch = Settings.ChatFormat_TeleportRequest.Match(text);
+                Match regexMatch =Handler.Settings.ChatFormat_TeleportRequest.Match(text);
                 if (regexMatch.Success && regexMatch.Groups.Count >= 2)
                 {
                     sender = regexMatch.Groups[1].Value;
@@ -709,7 +709,7 @@ namespace MinecraftClient
             }
 
             //Built-in detection routine for teleport requests
-            if (Settings.ChatFormat_Builtins)
+            if (Handler.Settings.ChatFormat_Builtins)
             {
                 string[] tmp = text.Split(' ');
 
@@ -750,7 +750,7 @@ namespace MinecraftClient
                 ConsoleIO.WriteLogLine(String.Format("[{0}] {1}", this.GetType().Name, text));
             else
                 Handler.Log.Info(String.Format("[{0}] {1}", this.GetType().Name, text));
-            string logfile = Settings.ExpandVars(Settings.chatbotLogFile);
+            string logfile = Handler.Settings.ExpandVars(Handler.Settings.chatbotLogFile);
 
             if (!String.IsNullOrEmpty(logfile))
             {
@@ -772,8 +772,7 @@ namespace MinecraftClient
         /// <param name="text">Debug log text to write</param>
         protected void LogDebugToConsole(object text)
         {
-            if (Settings.DebugMessages)
-                LogToConsole(text);
+            Serilog.Log.Debug((string)text);
         }
 
         /// <summary>
@@ -804,8 +803,7 @@ namespace MinecraftClient
         /// <param name="delaySeconds">Optional delay, in seconds, before restarting</param>
         protected void ReconnectToTheServer(int ExtraAttempts = 3, int delaySeconds = 0)
         {
-            if (Settings.DebugMessages)
-                ConsoleIO.WriteLogLine(Translations.Get("chatbot.reconnect", this.GetType().Name));
+            Serilog.Log.Debug(Translations.Get("chatbot.reconnect", this.GetType().Name));
             McClient.ReconnectionAttemptsLeft = ExtraAttempts;
             Program.Restart(delaySeconds);
         }
@@ -837,7 +835,7 @@ namespace MinecraftClient
         /// <param name="message">Message</param>
         protected void SendPrivateMessage(string player, string message)
         {
-            SendText(String.Format("/{0} {1} {2}", Settings.PrivateMsgsCmdName, player, message));
+            SendText(String.Format("/{0} {1} {2}", Handler.Settings.PrivateMsgsCmdName, player, message));
         }
 
         /// <summary>
@@ -1482,7 +1480,8 @@ namespace MinecraftClient
             public override string CmdUsage { get { return _cmdUsage; } }
             public override string CmdDesc { get { return _cmdDesc; } }
 
-            public override string Run(McClient handler, string command, Dictionary<string, object> localVars)
+            public override string Run(Settings settings, McClient handler, string command,
+                Dictionary<string, object> localVars)
             {
                 return this.Runner(command, getArgs(command));
             }

@@ -6,6 +6,8 @@ using System.IO;
 using System.Text.RegularExpressions;
 using MinecraftClient.Protocol.Session;
 using MinecraftClient.Protocol;
+using MinecraftClient.Proxy;
+using Starksoft.Aspen.Proxy;
 
 namespace MinecraftClient
 {
@@ -14,7 +16,7 @@ namespace MinecraftClient
     /// Allows settings loading from an INI file
     /// </summary>
 
-    public static class Settings
+    public class Settings
     {
         //Minecraft Console Client client information used for BrandInfo setting
         private const string MCCBrandInfo = "Minecraft-Console-Client/" + Program.Version;
@@ -22,44 +24,45 @@ namespace MinecraftClient
         //Main Settings.
         //Login: Username or email adress used as login for Minecraft/Mojang account
         //Username: The actual username of the user, obtained after login to the account
-        public static string Login = "";
-        public static string Username = "";
-        public static string Password = "";
-        public static ProtocolHandler.AccountType AccountType = ProtocolHandler.AccountType.Mojang;
-        public static string LoginMethod = "mcc";
-        public static string ServerIP = "";
-        public static ushort ServerPort = 25565;
-        public static string ServerVersion = "";
-        public static bool ServerForceForge = false;
-        public static bool ServerAutodetectForge = true;
-        public static string SingleCommand = "";
-        public static string ConsoleTitle = "";
+        public string Login = "";
+        public string Username = "";
+        public string Password = "";
+        public ProtocolHandler.AccountType AccountType = ProtocolHandler.AccountType.Mojang;
+        public string LoginMethod = "mcc";
+        public ProtocolHandler.LoginMethod loginEnum = ProtocolHandler.LoginMethod.MCC;
+        public string ServerIP = "";
+        public ushort ServerPort = 25565;
+        public string ServerVersion = "";
+        public bool ServerForceForge = false;
+        public bool ServerAutodetectForge = true;
+        public string SingleCommand = "";
+        public string ConsoleTitle = "";
 
         //Proxy Settings
         public static bool ProxyEnabledLogin = false;
         public static bool ProxyEnabledIngame = false;
         public static string ProxyHost = "";
         public static int ProxyPort = 0;
-        public static Proxy.ProxyHandler.Type proxyType = Proxy.ProxyHandler.Type.HTTP;
+        public static Proxy.ProxyHandler.MCCProxyType ProxyMccProxyType = Proxy.ProxyHandler.MCCProxyType.HTTP;
         public static string ProxyUsername = "";
         public static string ProxyPassword = "";
 
         //Minecraft Settings
-        public static bool MCSettings_Enabled = true;
-        public static string MCSettings_Locale = "en_US";
-        public static byte MCSettings_Difficulty = 0;
-        public static byte MCSettings_RenderDistance = 8;
-        public static byte MCSettings_ChatMode = 0;
-        public static bool MCSettings_ChatColors = true;
-        public static byte MCSettings_MainHand = 0;
-        public static bool MCSettings_Skin_Hat = true;
-        public static bool MCSettings_Skin_Cape = true;
-        public static bool MCSettings_Skin_Jacket = false;
-        public static bool MCSettings_Skin_Sleeve_Left = false;
-        public static bool MCSettings_Skin_Sleeve_Right = false;
-        public static bool MCSettings_Skin_Pants_Left = false;
-        public static bool MCSettings_Skin_Pants_Right = false;
-        public static byte MCSettings_Skin_All
+        public bool MCSettings_Enabled = true;
+        public string MCSettings_Locale = "en_US";
+        public byte MCSettings_Difficulty = 0;
+        public byte MCSettings_RenderDistance = 8;
+        public byte MCSettings_ChatMode = 0;
+        public bool MCSettings_ChatColors = true;
+        public byte MCSettings_MainHand = 0;
+        public bool MCSettings_Skin_Hat = true;
+        public bool MCSettings_Skin_Cape = true;
+        public bool MCSettings_Skin_Jacket = false;
+        public bool MCSettings_Skin_Sleeve_Left = false;
+        public bool MCSettings_Skin_Sleeve_Right = false;
+        public bool MCSettings_Skin_Pants_Left = false;
+        public bool MCSettings_Skin_Pants_Right = false;
+        public byte MCSettings_Skin_All
         {
             get
             {
@@ -76,145 +79,142 @@ namespace MinecraftClient
         }
 
         //Other Settings
-        public static string TranslationsFile_FromMCDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\.minecraft\assets\objects\eb\ebf762c137bd91ab2496397f2504e250f3c5d1ba"; //MC 1.16 en_GB.lang
-        public static string TranslationsFile_Website_Index = "https://launchermeta.mojang.com/v1/packages/bdb68de96a44ec1e9ed6d9cfcd2ee973be618c3a/1.16.json";
-        public static string TranslationsFile_Website_Download = "http://resources.download.minecraft.net";
-        public static TimeSpan messageCooldown = TimeSpan.FromSeconds(2);
-        public static List<string> Bots_Owners = new List<string>();
-        public static string Language = "en_GB";
-        public static bool interactiveMode = true;
-        public static char internalCmdChar = '/';
-        public static bool playerHeadAsIcon = false;
-        public static string chatbotLogFile = "";
-        public static bool CacheScripts = true;
-        public static string BrandInfo = MCCBrandInfo;
-        public static bool DisplaySystemMessages = true;
-        public static bool DisplayXPBarMessages = true;
-        public static bool DisplayChatLinks = true;
-        public static bool DisplayInventoryLayout = true;
-        public static bool TerrainAndMovements = false;
-        public static bool InventoryHandling = false;
-        public static string PrivateMsgsCmdName = "tell";
-        public static CacheType SessionCaching = CacheType.Disk;
-        public static bool ResolveSrvRecords = true;
-        public static bool ResolveSrvRecordsShortTimeout = true;
-        public static bool EntityHandling = false;
-        public static bool AutoRespawn = false;
-        public static bool MinecraftRealmsEnabled = true;
+        public TimeSpan messageCooldown = TimeSpan.FromSeconds(2);
+        public List<string> Bots_Owners = new List<string>();
+        public string Language = "en_GB";
+        public bool interactiveMode = true;
+        public char internalCmdChar = '/';
+        public bool playerHeadAsIcon = false;
+        public string chatbotLogFile = "";
+        public bool CacheScripts = true;
+        public string BrandInfo = MCCBrandInfo;
+        public bool DisplaySystemMessages = true;
+        public bool DisplayXPBarMessages = true;
+        public bool DisplayChatLinks = true;
+        public bool DisplayInventoryLayout = true;
+        public bool TerrainAndMovements = false;
+        public bool InventoryHandling = false;
+        public string PrivateMsgsCmdName = "tell";
+        public CacheType SessionCaching = CacheType.Disk;
+        public bool ResolveSrvRecords = true;
+        public bool ResolveSrvRecordsShortTimeout = true;
+        public bool EntityHandling = false;
+        public bool AutoRespawn = false;
+        public bool MinecraftRealmsEnabled = true;
 
         // Logging
         public enum FilterModeEnum { Blacklist, Whitelist }
-        public static bool DebugMessages = false;
-        public static bool ChatMessages = true;
-        public static bool InfoMessages = true;
-        public static bool WarningMessages = true;
-        public static bool ErrorMessages = true;
-        public static Regex ChatFilter = null;
-        public static Regex DebugFilter = null;
-        public static FilterModeEnum FilterMode = FilterModeEnum.Blacklist;
-        public static bool LogToFile = false;
-        public static string LogFile = "console-log.txt";
-        public static bool PrependTimestamp = false;
+        public bool DebugMessages = false;
+        public bool ChatMessages = true;
+        public bool InfoMessages = true;
+        public bool WarningMessages = true;
+        public bool ErrorMessages = true;
+        public Regex ChatFilter = null;
+        public Regex DebugFilter = null;
+        public FilterModeEnum FilterMode = FilterModeEnum.Blacklist;
+        public bool LogToFile = false;
+        public string LogFile = "console-log.txt";
+        public bool PrependTimestamp = false;
 
         //AntiAFK Settings
-        public static bool AntiAFK_Enabled = false;
-        public static int AntiAFK_Delay = 600;
-        public static string AntiAFK_Command = "/ping";
+        public bool AntiAFK_Enabled = false;
+        public int AntiAFK_Delay = 600;
+        public string AntiAFK_Command = "/ping";
 
         //Hangman Settings
-        public static bool Hangman_Enabled = false;
-        public static bool Hangman_English = true;
-        public static string Hangman_FileWords_EN = "hangman-en.txt";
-        public static string Hangman_FileWords_FR = "hangman-fr.txt";
+        public bool Hangman_Enabled = false;
+        public bool Hangman_English = true;
+        public string Hangman_FileWords_EN = "hangman-en.txt";
+        public string Hangman_FileWords_FR = "hangman-fr.txt";
 
         //Alerts Settings
-        public static bool Alerts_Enabled = false;
-        public static bool Alerts_Beep_Enabled = true;
-        public static string Alerts_MatchesFile = "alerts.txt";
-        public static string Alerts_ExcludesFile = "alerts-exclude.txt";
+        public bool Alerts_Enabled = false;
+        public bool Alerts_Beep_Enabled = true;
+        public string Alerts_MatchesFile = "alerts.txt";
+        public string Alerts_ExcludesFile = "alerts-exclude.txt";
 
         //ChatLog Settings
-        public static bool ChatLog_Enabled = false;
-        public static bool ChatLog_DateTime = true;
-        public static string ChatLog_File = "chatlog.txt";
-        public static ChatBots.ChatLog.MessageFilter ChatLog_Filter = ChatBots.ChatLog.MessageFilter.AllMessages;
+        public bool ChatLog_Enabled = false;
+        public bool ChatLog_DateTime = true;
+        public string ChatLog_File = "chatlog.txt";
+        public ChatBots.ChatLog.MessageFilter ChatLog_Filter = ChatBots.ChatLog.MessageFilter.AllMessages;
 
         //PlayerListLog Settings
-        public static bool PlayerLog_Enabled = false;
-        public static string PlayerLog_File = "playerlog.txt";
-        public static int PlayerLog_Delay = 600;
+        public bool PlayerLog_Enabled = false;
+        public string PlayerLog_File = "playerlog.txt";
+        public int PlayerLog_Delay = 600;
 
         //AutoRelog Settings
-        public static bool AutoRelog_Enabled = false;
-        public static int AutoRelog_Delay_Min = 10;
-        public static int AutoRelog_Delay_Max = 10;
-        public static int AutoRelog_Retries = 3;
-        public static bool AutoRelog_IgnoreKickMessage = false;
-        public static string AutoRelog_KickMessagesFile = "kickmessages.txt";
+        public bool AutoRelog_Enabled = false;
+        public int AutoRelog_Delay_Min = 10;
+        public int AutoRelog_Delay_Max = 10;
+        public int AutoRelog_Retries = 3;
+        public bool AutoRelog_IgnoreKickMessage = false;
+        public string AutoRelog_KickMessagesFile = "kickmessages.txt";
 
         //Script Scheduler Settings
-        public static bool ScriptScheduler_Enabled = false;
-        public static string ScriptScheduler_TasksFile = "tasks.ini";
+        public bool ScriptScheduler_Enabled = false;
+        public string ScriptScheduler_TasksFile = "tasks.ini";
 
         //Remote Control
-        public static bool RemoteCtrl_Enabled = false;
-        public static bool RemoteCtrl_AutoTpaccept = true;
-        public static bool RemoteCtrl_AutoTpaccept_Everyone = false;
+        public bool RemoteCtrl_Enabled = false;
+        public bool RemoteCtrl_AutoTpaccept = true;
+        public bool RemoteCtrl_AutoTpaccept_Everyone = false;
 
         //Chat Message Parsing
-        public static bool ChatFormat_Builtins = true;
-        public static Regex ChatFormat_Public = null;
-        public static Regex ChatFormat_Private = null;
-        public static Regex ChatFormat_TeleportRequest = null;
+        public bool ChatFormat_Builtins = true;
+        public Regex ChatFormat_Public = null;
+        public Regex ChatFormat_Private = null;
+        public Regex ChatFormat_TeleportRequest = null;
 
         //Auto Respond
-        public static bool AutoRespond_Enabled = false;
-        public static string AutoRespond_Matches = "matches.ini";
+        public bool AutoRespond_Enabled = false;
+        public string AutoRespond_Matches = "matches.ini";
 
         //Auto Attack
-        public static bool AutoAttack_Enabled = false;
-        public static string AutoAttack_Mode = "single";
-        public static string AutoAttack_Priority = "distance";
-        public static bool AutoAttack_OverrideAttackSpeed = false;
-        public static double AutoAttack_CooldownSeconds = 1;
+        public bool AutoAttack_Enabled = false;
+        public string AutoAttack_Mode = "single";
+        public string AutoAttack_Priority = "distance";
+        public bool AutoAttack_OverrideAttackSpeed = false;
+        public double AutoAttack_CooldownSeconds = 1;
 
         //Auto Fishing
-        public static bool AutoFishing_Enabled = false;
-        public static bool AutoFishing_Antidespawn = false;
+        public bool AutoFishing_Enabled = false;
+        public bool AutoFishing_Antidespawn = false;
 
         //Auto Eating
-        public static bool AutoEat_Enabled = false;
-        public static int AutoEat_hungerThreshold = 6;
+        public bool AutoEat_Enabled = false;
+        public int AutoEat_hungerThreshold = 6;
 
         //AutoCraft
-        public static bool AutoCraft_Enabled = false;
-        public static string AutoCraft_configFile = @"autocraft\config.ini";
+        public bool AutoCraft_Enabled = false;
+        public string AutoCraft_configFile = @"autocraft\config.ini";
         
         //Mailer
-        public static bool Mailer_Enabled = false;
-        public static string Mailer_DatabaseFile = "MailerDatabase.ini";
-        public static string Mailer_IgnoreListFile = "MailerIgnoreList.ini";
-        public static bool Mailer_PublicInteractions = false;
-        public static int Mailer_MaxMailsPerPlayer = 10;
-        public static int Mailer_MaxDatabaseSize = 10000;
-        public static int Mailer_MailRetentionDays = 30;
+        public bool Mailer_Enabled = false;
+        public string Mailer_DatabaseFile = "MailerDatabase.ini";
+        public string Mailer_IgnoreListFile = "MailerIgnoreList.ini";
+        public bool Mailer_PublicInteractions = false;
+        public int Mailer_MaxMailsPerPlayer = 10;
+        public int Mailer_MaxDatabaseSize = 10000;
+        public int Mailer_MailRetentionDays = 30;
 
         //AutoDrop
-        public static bool AutoDrop_Enabled = false;
-        public static string AutoDrop_Mode = "include";
-        public static string AutoDrop_items = "";
+        public bool AutoDrop_Enabled = false;
+        public string AutoDrop_Mode = "include";
+        public string AutoDrop_items = "";
 
         // Replay Mod
-        public static bool ReplayMod_Enabled = false;
-        public static int ReplayMod_BackupInterval = 3000;
+        public bool ReplayMod_Enabled = false;
+        public int ReplayMod_BackupInterval = 3000;
 
         //Custom app variables and Minecraft accounts
-        private static readonly Dictionary<string, object> AppVars = new Dictionary<string, object>();
-        private static readonly Dictionary<string, KeyValuePair<string, string>> Accounts = new Dictionary<string, KeyValuePair<string, string>>();
-        private static readonly Dictionary<string, KeyValuePair<string, ushort>> Servers = new Dictionary<string, KeyValuePair<string, ushort>>();
+        private readonly Dictionary<string, object> AppVars = new Dictionary<string, object>();
+        private readonly Dictionary<string, KeyValuePair<string, string>> Accounts = new Dictionary<string, KeyValuePair<string, string>>();
+        private readonly Dictionary<string, KeyValuePair<string, ushort>> Servers = new Dictionary<string, KeyValuePair<string, ushort>>();
 
         //Temporary Server Alias storage when server list is not loaded yet
-        private static string ServerAliasTemp = null;
+        private string ServerAliasTemp = null;
 
         //Mapping for settings sections in the INI file
         private enum Section { Default, Main, AppVars, Proxy, MCSettings, AntiAFK, Hangman, Alerts, ChatLog, AutoRelog, ScriptScheduler, RemoteControl, ChatFormat, AutoRespond, AutoAttack, AutoFishing, AutoEat, AutoCraft, AutoDrop, Mailer, ReplayMod, Logging };
@@ -224,7 +224,7 @@ namespace MinecraftClient
         /// </summary>
         /// <param name="name">Section name</param>
         /// <returns>Section enum</returns>
-        private static Section GetSection(string name)
+        private Section GetSection(string name)
         {
             Section pMode;
             if (Enum.TryParse(name, true, out pMode))
@@ -236,7 +236,7 @@ namespace MinecraftClient
         /// Load settings from the given INI file
         /// </summary>
         /// <param name="file">File to load</param>
-        public static void LoadFile(string file)
+        public void LoadFile(string file)
         {
             ConsoleIO.WriteLogLine("[Settings] Loading Settings from " + Path.GetFullPath(file));
             if (File.Exists(file))
@@ -278,7 +278,7 @@ namespace MinecraftClient
         /// </summary>
         /// <param name="args">Command-line arguments</param>
         /// <exception cref="System.ArgumentException">Thrown on invalid arguments</exception>
-        public static void LoadArguments(string[] args)
+        public void LoadArguments(string[] args)
         {
             int positionalIndex = 0;
 
@@ -329,7 +329,7 @@ namespace MinecraftClient
         /// <param name="argName">Setting name</param>
         /// <param name="argValue">Setting value</param>
         /// <returns>TRUE if setting was valid</returns>
-        private static bool LoadSingleSetting(Section section, string argName, string argValue)
+        private bool LoadSingleSetting(Section section, string argName, string argValue)
         {
             switch (section)
             {
@@ -341,9 +341,11 @@ namespace MinecraftClient
                         case "type": AccountType = argValue == "mojang"
                                 ? ProtocolHandler.AccountType.Mojang
                                 : ProtocolHandler.AccountType.Microsoft; return true;
-                        case "method": LoginMethod = argValue.ToLower() == "browser"
-                                ? "browser"
-                                : "mcc"; return true;
+                        case "method": {
+                            LoginMethod = argValue.ToLower() == "browser" ? "browser": "mcc";
+                            loginEnum = argValue.ToLower() == "browser" ? ProtocolHandler.LoginMethod.Browser : ProtocolHandler.LoginMethod.MCC;
+                            return true;
+                        }
                         case "serverip": if (!SetServerIP(argValue)) ServerAliasTemp = argValue; return true;
                         case "singlecommand": SingleCommand = argValue; return true;
                         case "language": Language = argValue; return true;
@@ -406,6 +408,7 @@ namespace MinecraftClient
                                             = new KeyValuePair<string, string>(account_data[1], account_data[2]);
                                 }
 
+                                // todo what does this do
                                 //Try user value against aliases after load
                                 SetAccount(Login);
                             }
@@ -603,10 +606,10 @@ namespace MinecraftClient
                             return true;
                         case "type":
                             argValue = argValue.ToLower();
-                            if (argValue == "http") { proxyType = Proxy.ProxyHandler.Type.HTTP; }
-                            else if (argValue == "socks4") { proxyType = Proxy.ProxyHandler.Type.SOCKS4; }
-                            else if (argValue == "socks4a") { proxyType = Proxy.ProxyHandler.Type.SOCKS4a; }
-                            else if (argValue == "socks5") { proxyType = Proxy.ProxyHandler.Type.SOCKS5; }
+                            if (argValue == "http") { ProxyMccProxyType = Proxy.ProxyHandler.MCCProxyType.HTTP; }
+                            else if (argValue == "socks4") { ProxyMccProxyType = Proxy.ProxyHandler.MCCProxyType.SOCKS4; }
+                            else if (argValue == "socks4a") { ProxyMccProxyType = Proxy.ProxyHandler.MCCProxyType.SOCKS4a; }
+                            else if (argValue == "socks5") { ProxyMccProxyType = Proxy.ProxyHandler.MCCProxyType.SOCKS5; }
                             return true;
                         case "server":
                             string[] host_splitted = argValue.Split(':');
@@ -776,7 +779,7 @@ namespace MinecraftClient
         /// Write an INI file with default settings
         /// </summary>
         /// <param name="settingsfile">File to (over)write</param>
-        public static void WriteDefaultSettings(string settingsfile)
+        public void WriteDefaultSettings(string settingsfile)
         {
             // Load embedded default config and adjust line break for the current operating system
             string settingsContents = String.Join(Environment.NewLine, 
@@ -812,7 +815,7 @@ namespace MinecraftClient
         /// </summary>
         /// <param name="str">String to parse as a float number</param>
         /// <returns>Float number</returns>
-        public static float str2float(string str)
+        public static float str2float(string str) 
         {
             float f;
             if (float.TryParse(str.Trim(), out f))
@@ -841,23 +844,23 @@ namespace MinecraftClient
         /// Load login/password using an account alias
         /// </summary>
         /// <returns>True if the account was found and loaded</returns>
-        public static bool SetAccount(string accountAlias)
+        public bool SetAccount(string accountAlias)
         {
             accountAlias = accountAlias.ToLower();
             if (Accounts.ContainsKey(accountAlias))
-            {
-                Settings.Login = Accounts[accountAlias].Key;
-                Settings.Password = Accounts[accountAlias].Value;
+            { 
+                Login = Accounts[accountAlias].Key;
+                Password = Accounts[accountAlias].Value;
                 return true;
             }
             else return false;
         }
-
+        
         /// <summary>
         /// Load server information in ServerIP and ServerPort variables from a "serverip:port" couple or server alias
         /// </summary>
         /// <returns>True if the server IP was valid and loaded, false otherwise</returns>
-        public static bool SetServerIP(string server)
+        public bool SetServerIP(string server)
         {
             server = server.ToLower();
             string[] sip = server.Split(':');
@@ -900,7 +903,7 @@ namespace MinecraftClient
         /// <param name="varName">Name of the variable</param>
         /// <param name="varData">Value of the variable</param>
         /// <returns>True if the parameters were valid</returns>
-        public static bool SetVar(string varName, object varData)
+        public bool SetVar(string varName, object varData)
         {
             lock (AppVars)
             {
@@ -919,7 +922,7 @@ namespace MinecraftClient
         /// </summary>
         /// <param name="varName">Variable name</param>
         /// <returns>The value or null if the variable does not exists</returns>
-        public static object GetVar(string varName)
+        public object GetVar(string varName)
         {
             if (AppVars.ContainsKey(varName))
                 return AppVars[varName];
@@ -932,7 +935,7 @@ namespace MinecraftClient
         /// <param name="str">String to parse</param>
         /// <param name="localContext">Optional local variables overriding global variables</param>
         /// <returns>Modifier string</returns>
-        public static string ExpandVars(string str, Dictionary<string, object> localVars = null)
+        public string ExpandVars(string str, Dictionary<string, object> localVars = null)
         {
             StringBuilder result = new StringBuilder();
             for (int i = 0; i < str.Length; i++)
@@ -983,6 +986,29 @@ namespace MinecraftClient
                 else result.Append(str[i]);
             }
             return result.ToString();
+        }
+
+        public struct ProxySettings {
+            public bool ProxyEnabledLogin;
+            public bool ProxyEnabledInGame;
+            public string ProxyHost;
+            public int ProxyPort;
+            public ProxyHandler.MCCProxyType ProxyType;
+            public string? ProxyUsername;
+            public string? ProxyPassword;
+            public ProxySettings(string proxyHost, int proxyPort, ProxyHandler.MCCProxyType proxyType, string? proxyUsername = null, string? proxyPassword = null, bool proxyEnabledLogin = false, bool proxyEnabledInGame = false) {
+                ProxyHost = proxyHost;
+                ProxyEnabledLogin = proxyEnabledLogin;
+                ProxyEnabledInGame = proxyEnabledInGame;
+                ProxyPort = proxyPort;
+                ProxyType = proxyType;
+                ProxyUsername = proxyUsername;
+                ProxyPassword = proxyPassword;
+            }
+        }
+
+        public ProxySettings GetProxySettings() {
+            return new ProxySettings(ProxyHost, ProxyPort, ProxyMccProxyType, ProxyUsername, ProxyPassword, ProxyEnabledLogin, ProxyEnabledIngame);
         }
     }
 }

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Collections.Specialized;
+using MinecraftClient.Proxy;
+using Serilog;
 
 namespace MinecraftClient.Protocol
 {
@@ -20,6 +22,11 @@ namespace MinecraftClient.Protocol
         private Regex confirm = new Regex("identity\\/confirm");
         private Regex invalidAccount = new Regex("Sign in to", RegexOptions.IgnoreCase);
         private Regex twoFA = new Regex("Help us protect your account", RegexOptions.IgnoreCase);
+        
+        private readonly ProxyHandler _proxyHandler;
+        public XboxLive(ProxyHandler proxyHandler) {
+            _proxyHandler = proxyHandler;
+        }
 
         public string SignInUrl { get { return authorize; } }
 
@@ -30,7 +37,7 @@ namespace MinecraftClient.Protocol
         /// <returns></returns>
         public PreAuthResponse PreAuth()
         {
-            var request = new ProxiedWebRequest(authorize);
+            var request = new ProxiedWebRequest(_proxyHandler, authorize);
             request.UserAgent = userAgent;
             var response = request.Get();
 
@@ -65,7 +72,7 @@ namespace MinecraftClient.Protocol
         /// <returns></returns>
         public UserLoginResponse UserLogin(string email, string password, PreAuthResponse preAuth)
         {
-            var request = new ProxiedWebRequest(preAuth.UrlPost, preAuth.Cookie);
+            var request = new ProxiedWebRequest(_proxyHandler, preAuth.UrlPost, preAuth.Cookie);
             request.UserAgent = userAgent;
 
             string postData = "login=" + Uri.EscapeDataString(email)
@@ -75,17 +82,14 @@ namespace MinecraftClient.Protocol
 
             var response = request.Post("application/x-www-form-urlencoded", postData);
 
-            if (Settings.DebugMessages)
-            {
-                ConsoleIO.WriteLine(response.ToString());
-            }
+            Log.Debug(response.ToString());
 
             if (response.StatusCode >= 300 && response.StatusCode <= 399)
             {
                 string url = response.Headers.Get("Location");
                 string hash = url.Split('#')[1];
 
-                var request2 = new ProxiedWebRequest(url);
+                var request2 = new ProxiedWebRequest(_proxyHandler, url);
                 var response2 = request2.Get();
 
                 if (response2.StatusCode != 200)
@@ -133,7 +137,7 @@ namespace MinecraftClient.Protocol
         /// <returns></returns>
         public XblAuthenticateResponse XblAuthenticate(UserLoginResponse loginResponse)
         {
-            var request = new ProxiedWebRequest(xbl);
+            var request = new ProxiedWebRequest(_proxyHandler, xbl);
             request.UserAgent = userAgent;
             request.Accept = "application/json";
             request.Headers.Add("x-xbl-contract-version", "0");
@@ -148,10 +152,8 @@ namespace MinecraftClient.Protocol
                 + "\"TokenType\": \"JWT\""
                 + "}";
             var response = request.Post("application/json", payload);
-            if (Settings.DebugMessages)
-            {
-                ConsoleIO.WriteLine(response.ToString());
-            }
+            Log.Debug(response.ToString());
+            
             if (response.StatusCode == 200)
             {
                 string jsonString = response.Body;
@@ -180,7 +182,7 @@ namespace MinecraftClient.Protocol
         /// <returns></returns>
         public XSTSAuthenticateResponse XSTSAuthenticate(XblAuthenticateResponse xblResponse)
         {
-            var request = new ProxiedWebRequest(xsts);
+            var request = new ProxiedWebRequest(_proxyHandler, xsts);
             request.UserAgent = userAgent;
             request.Accept = "application/json";
             request.Headers.Add("x-xbl-contract-version", "1");
@@ -196,10 +198,8 @@ namespace MinecraftClient.Protocol
                 + "\"TokenType\": \"JWT\""
                 + "}";
             var response = request.Post("application/json", payload);
-            if (Settings.DebugMessages)
-            {
-                ConsoleIO.WriteLine(response.ToString());
-            }
+            Log.Debug(response.ToString());
+            
             if (response.StatusCode == 200)
             {
                 string jsonString = response.Body;
@@ -263,9 +263,14 @@ namespace MinecraftClient.Protocol
 
     class MinecraftWithXbox
     {
+        private readonly ProxyHandler _proxyHandler;
         private readonly string loginWithXbox = "https://api.minecraftservices.com/authentication/login_with_xbox";
         private readonly string ownership = "https://api.minecraftservices.com/entitlements/mcstore";
         private readonly string profile = "https://api.minecraftservices.com/minecraft/profile";
+
+        public MinecraftWithXbox(ProxyHandler proxyHandler) {
+            _proxyHandler = proxyHandler;
+        }
 
         /// <summary>
         /// Login to Minecraft using the XSTS token and user hash obtained before
@@ -275,16 +280,13 @@ namespace MinecraftClient.Protocol
         /// <returns></returns>
         public string LoginWithXbox(string userHash, string xstsToken)
         {
-            var request = new ProxiedWebRequest(loginWithXbox);
+            var request = new ProxiedWebRequest(_proxyHandler, loginWithXbox);
             request.Accept = "application/json";
 
             string payload = "{\"identityToken\": \"XBL3.0 x=" + userHash + ";" + xstsToken + "\"}";
             var response = request.Post("application/json", payload);
 
-            if (Settings.DebugMessages)
-            {
-                ConsoleIO.WriteLine(response.ToString());
-            }
+            Serilog.Log.Debug(response.ToString());
 
             string jsonString = response.Body;
             Json.JSONData json = Json.ParseJson(jsonString);
@@ -298,14 +300,11 @@ namespace MinecraftClient.Protocol
         /// <returns>True if the user own the game</returns>
         public bool UserHasGame(string accessToken)
         {
-            var request = new ProxiedWebRequest(ownership);
+            var request = new ProxiedWebRequest(_proxyHandler, ownership);
             request.Headers.Add("Authorization", string.Format("Bearer {0}", accessToken));
             var response = request.Get();
 
-            if (Settings.DebugMessages)
-            {
-                ConsoleIO.WriteLine(response.ToString());
-            }
+            Serilog.Log.Debug(response.ToString());
 
             string jsonString = response.Body;
             Json.JSONData json = Json.ParseJson(jsonString);
@@ -314,14 +313,11 @@ namespace MinecraftClient.Protocol
 
         public UserProfile GetUserProfile(string accessToken)
         {
-            var request = new ProxiedWebRequest(profile);
+            var request = new ProxiedWebRequest(_proxyHandler, profile);
             request.Headers.Add("Authorization", string.Format("Bearer {0}", accessToken));
             var response = request.Get();
 
-            if (Settings.DebugMessages)
-            {
-                ConsoleIO.WriteLine(response.ToString());
-            }
+            Serilog.Log.Debug(response.ToString());
 
             string jsonString = response.Body;
             Json.JSONData json = Json.ParseJson(jsonString);

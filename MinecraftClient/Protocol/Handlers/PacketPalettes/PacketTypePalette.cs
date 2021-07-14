@@ -66,8 +66,7 @@ namespace MinecraftClient.Protocol.Handlers.PacketPalettes
             }
             else if (forgeEnabled)
             {
-                if (Settings.DebugMessages)
-                    ConsoleIO.WriteLogLine("Ignoring unknown packet ID of 0x" + packetId.ToString("X2"));
+                Serilog.Log.Debug("Ignoring unknown packet ID of 0x" + packetId.ToString("X2"));
                 return PacketTypesIn.Unknown;
             }
             else
@@ -98,8 +97,7 @@ namespace MinecraftClient.Protocol.Handlers.PacketPalettes
             }
             else if (forgeEnabled)
             {
-                if (Settings.DebugMessages)
-                    ConsoleIO.WriteLogLine("Ignoring unknown packet ID of 0x" + packetId.ToString("X2"));
+                Serilog.Log.Debug("Ignoring unknown packet ID of 0x" + packetId.ToString("X2"));
                 return PacketTypesOut.Unknown;
             }
             else

@@ -24,11 +24,8 @@ namespace MinecraftClient
         /// <param name="handler">Callback for file changes</param>
         public FileMonitor(string folder, string filename, FileSystemEventHandler handler)
         {
-            if (Settings.DebugMessages)
-            {
-                string callerClass = new System.Diagnostics.StackFrame(1).GetMethod().DeclaringType.Name;
-                ConsoleIO.WriteLineFormatted(Translations.Get("filemonitor.init", callerClass, Path.Combine(folder, filename)));
-            }
+            string callerClass = new System.Diagnostics.StackFrame(1).GetMethod().DeclaringType.Name;
+            Serilog.Log.Debug(Translations.Get("filemonitor.init", callerClass, Path.Combine(folder, filename)));
 
             try {
                 monitor = new Tuple<FileSystemWatcher, CancellationTokenSource>(new FileSystemWatcher(), new CancellationTokenSource());
@@ -41,11 +38,7 @@ namespace MinecraftClient
             }
             catch
             {
-                if (Settings.DebugMessages)
-                {
-                    string callerClass = new System.Diagnostics.StackFrame(1).GetMethod().DeclaringType.Name;
-                    ConsoleIO.WriteLineFormatted(Translations.Get("filemonitor.fail", callerClass));
-                }
+                Serilog.Log.Debug(Translations.Get("filemonitor.fail", callerClass));
 
                 monitor = null;
                 var cancellationTokenSource = new CancellationTokenSource();

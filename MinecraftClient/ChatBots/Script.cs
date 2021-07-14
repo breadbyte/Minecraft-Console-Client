@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Sentry;
+using Serilog;
 
 namespace MinecraftClient.ChatBots
 {
@@ -111,21 +112,13 @@ namespace MinecraftClient.ChatBots
                 }
             }
 
-            if (Settings.DebugMessages)
-            {
-                string caller = "Script";
-                try {
-                    StackFrame frame = new StackFrame(1);
-                    MethodBase method = frame.GetMethod();
-                    Type type = method.DeclaringType;
-                    caller = type.Name;
-                }
-                catch (Exception e) {
-                    SentrySdk.CaptureException(e);
-                }
-                ConsoleIO.WriteLineFormatted(Translations.Get("bot.script.not_found", caller, filename));
-            }
-
+            string caller = "Script";
+            StackFrame frame = new StackFrame(1);
+            MethodBase method = frame.GetMethod();
+            Type type = method.DeclaringType;
+            caller = type.Name;
+            
+            Log.Debug(Translations.Get("bot.script.not_found", caller, filename));
             return false;
         }
 
@@ -192,7 +185,7 @@ namespace MinecraftClient.ChatBots
                         {
                             if (instruction_line[0] != '#' && instruction_line[0] != '/' && instruction_line[1] != '/')
                             {
-                                instruction_line = Settings.ExpandVars(instruction_line, localVars);
+                                instruction_line = Handler.Settings.ExpandVars(instruction_line, localVars);
                                 string instruction_name = instruction_line.Split(' ')[0];
                                 switch (instruction_name.ToLower())
                                 {

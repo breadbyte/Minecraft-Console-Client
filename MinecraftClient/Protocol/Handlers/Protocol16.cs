@@ -427,7 +427,7 @@ namespace MinecraftClient.Protocol.Handlers
             else c.Client.Send(buffer);
         }
 
-        private async Task<bool> Handshake(string uuid, string username, string sessionID, string host, int port)
+        private async Task<bool> Handshake(ProxyHandler _proxyHandler, string uuid, string username, string sessionID, string host, int port)
         {
             //array
             byte[] data = new byte[10 + (username.Length + host.Length) * 2];
@@ -478,10 +478,9 @@ namespace MinecraftClient.Protocol.Handlers
 
                 if (serverID == "-")
                     Translations.WriteLineFormatted("mcc.server_offline");
-                else if (Settings.DebugMessages)
-                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.handshake", serverID));
-
-                return await StartEncryption(uuid, username, sessionID, token, serverID, PublicServerkey);
+                
+                Serilog.Log.Debug(Translations.Get("mcc.handshake", serverID));
+                return await StartEncryption(_proxyHandler, uuid, username, sessionID, token, serverID, PublicServerkey);
             }
             else
             {
@@ -490,18 +489,17 @@ namespace MinecraftClient.Protocol.Handlers
             }
         }
 
-        private async Task<bool> StartEncryption(string uuid, string username, string sessionID, byte[] token, string serverIDhash, byte[] serverKey)
+        private async Task<bool> StartEncryption(ProxyHandler _proxyHandler, string uuid, string username, string sessionID, byte[] token, string serverIDhash, byte[] serverKey)
         {
             System.Security.Cryptography.RSACryptoServiceProvider RSAService = CryptoHandler.DecodeRSAPublicKey(serverKey);
             byte[] secretKey = CryptoHandler.GenerateAESPrivateKey();
 
-            if (Settings.DebugMessages)
-                Translations.WriteLineFormatted("debug.crypto");
+            Serilog.Log.Debug("debug.crypto");
 
             if (serverIDhash != "-")
             {
                 Translations.WriteLine("mcc.session");
-                var checkSession = await ProtocolHandler.SessionCheckAsync(uuid, sessionID, CryptoHandler.getServerHash(serverIDhash, serverKey, secretKey));
+                var checkSession = await ProtocolHandler.SessionCheckAsync(_proxyHandler, uuid, sessionID, CryptoHandler.getServerHash(serverIDhash, serverKey, secretKey));
 
                 if (checkSession.IsFailed)
                 {
@@ -547,9 +545,9 @@ namespace MinecraftClient.Protocol.Handlers
             }
         }
 
-        public async Task<bool> Login()
+        public async Task<bool> Login(ProxyHandler _proxyHandler)
         {
-            if (await Handshake(handler.GetUserUUID(), handler.GetUsername(), handler.GetSessionID(), handler.GetServerHost(), handler.GetServerPort()))
+            if (await Handshake(_proxyHandler, handler.GetUserUUID(), handler.GetUsername(), handler.GetSessionID(), handler.GetServerHost(), handler.GetServerPort()))
             {
                 Send(new byte[] { 0xCD, 0 });
                 try
@@ -811,11 +809,11 @@ namespace MinecraftClient.Protocol.Handlers
             return result.ToArray();
         }
 
-        public static async Task<Result<ProtocolHandler.ProtocolPingResult>> doPing(string host, int port) {
+        public static async Task<Result<ProtocolHandler.ProtocolPingResult>> doPing(Settings.ProxySettings settings, ProxyHandler handler, string host, int port) {
             int protocolVersion;
 
             string version = "";
-            var tcpResult = ProxyHandler.CreateTcpClient(host, port).Result;
+            var tcpResult = await handler.CreateTcpClient(host, port);
 
             if (tcpResult.IsFailed)
                 return Result.Fail("TcpClient failed to connect");
@@ -831,13 +829,8 @@ namespace MinecraftClient.Protocol.Handlers
             if (ping[0] == 0xff) {
                 Protocol16Handler ComTmp = new Protocol16Handler(tcp);
                 string result = ComTmp.readNextString();
-
-                if (Settings.DebugMessages) {
-                    // May contain formatting codes, cannot use WriteLineFormatted
-                    Console.ForegroundColor = ConsoleColor.DarkGray;
-                    ConsoleIO.WriteLine(result);
-                    Console.ForegroundColor = ConsoleColor.Gray;
-                }
+                
+                Serilog.Log.Debug($"Protocol16 Ping Result: {result}");
 
                 if (result.Length > 2 && result[0] == '§' && result[1] == '1') {
                     string[] tmp = result.Split((char) 0x00);

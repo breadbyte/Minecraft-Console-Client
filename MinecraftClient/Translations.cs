@@ -129,22 +129,14 @@ namespace MinecraftClient
                 ParseTranslationContent(File.ReadAllLines(langFileConfigLanguage));
                 return;
             }
-            else
-            {
-                if (Settings.DebugMessages)
-                    ConsoleIO.WriteLogLine("[Translations] No translation file found for " + language + ". (Looked '" + langFileConfigLanguage + "'");
-            }
+            Serilog.Log.Debug("[Translations] No translation file found for " + language + ". (Looked '" + langFileConfigLanguage + "'");
 
             if (File.Exists(langFileSystemLanguage))
             {// Fallback to system language
                 ParseTranslationContent(File.ReadAllLines(langFileSystemLanguage));
                 return;
             }
-            else
-            {
-                if (Settings.DebugMessages)
-                    ConsoleIO.WriteLogLine("[Translations] No translation file found for system language (" + systemLanguage + "). (Looked '" + langFileSystemLanguage + "'");
-            }
+            Serilog.Log.Debug("[Translations] No translation file found for system language (" + systemLanguage + "). (Looked '" + langFileSystemLanguage + "'");
         }
 
         /// <summary>

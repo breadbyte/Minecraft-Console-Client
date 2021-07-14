@@ -41,10 +41,13 @@ namespace MinecraftClient
         /// <summary>
         /// Perform the command
         /// </summary>
+        /// <param name="settings"></param>
+        /// <param name="handler"></param>
         /// <param name="command">The full command, eg: 'mycommand arg1 arg2'</param>
         /// <param name="localVars">Local variables passed along with the command (may be null)</param>
         /// <returns>A confirmation/error message, or "" if no message</returns>
-        public abstract string Run(McClient handler, string command, Dictionary<string, object> localVars);
+        public abstract string Run(Settings settings, McClient handler, string command,
+            Dictionary<string, object> localVars);
 
         /// <summary>
         /// Return a list of aliases for this command.

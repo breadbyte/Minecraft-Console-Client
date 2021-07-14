@@ -12,7 +12,8 @@ namespace MinecraftClient.Commands
         public override string CmdUsage { get { return GetBasicUsage(); } }
         public override string CmdDesc { get { return "cmd.inventory.desc"; } }
 
-        public override string Run(McClient handler, string command, Dictionary<string, object> localVars)
+        public override string Run(Settings settings, McClient handler, string command,
+            Dictionary<string, object> localVars)
         {
             if (handler.GetInventoryEnabled())
             {
@@ -100,7 +101,7 @@ namespace MinecraftClient.Commands
                                 List<string> response = new List<string>();
                                 response.Add(Translations.Get("cmd.inventory.inventory") + " #" + inventoryId + " - " + inventory.Title + "§8");
                                 string asciiArt = inventory.Type.GetAsciiArt();
-                                if (asciiArt != null && Settings.DisplayInventoryLayout)
+                                if (asciiArt != null && settings.DisplayInventoryLayout)
                                     response.Add(asciiArt);
                                 int selectedHotbar = handler.GetCurrentSlot() + 1;
                                 foreach (KeyValuePair<int, Item> item in itemsSorted)

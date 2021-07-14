@@ -75,15 +75,15 @@ namespace MinecraftClient.Protocol {
         /// <param name="serverIP">Server IP to ping</param>
         /// <param name="serverPort">Server Port to ping</param>
         /// <returns>TRUE if ping was successful</returns>
-        public static async Task<Result<ProtocolPingResult>> GetServerInfo(string serverIP, ushort serverPort) {
+        public static async Task<Result<ProtocolPingResult>> GetServerInfo(ProxyHandler handler, Settings.ProxySettings settings, string serverIP, ushort serverPort) {
             bool success = false;
             ProtocolPingResult protocolResult;
-            var protocol16 = await Protocol16Handler.doPing(serverIP, serverPort);
+            var protocol16 = await Protocol16Handler.doPing(settings, handler, serverIP, serverPort);
             if (protocol16.IsSuccess) {
                 protocolResult = protocol16.Value;
             }
             else {
-                var protocol18 = await Protocol18Handler.doPing(serverIP, serverPort);
+                var protocol18 = await Protocol18Handler.doPing(settings, handler, serverIP, serverPort);
                 if (protocol18.IsFailed) {
                     return Result.Fail(Translations.Get("error.connect"));
                 }
@@ -101,14 +101,14 @@ namespace MinecraftClient.Protocol {
         /// <param name="ProtocolVersion">Protocol version to handle</param>
         /// <param name="Handler">Handler with the appropriate callbacks</param>
         /// <returns></returns>
-        public static Result<IMinecraftCom> GetProtocolHandler(TcpClient Client, int ProtocolVersion, ForgeInfo forgeInfo, IMinecraftComHandler Handler)
+        public static Result<IMinecraftCom> GetProtocolHandler(TcpClient client, Settings settings, int ProtocolVersion, ForgeInfo forgeInfo, IMinecraftComHandler Handler)
         {
             int[] supportedVersions_Protocol16 = { 51, 60, 61, 72, 73, 74, 78 };
             if (Array.IndexOf(supportedVersions_Protocol16, ProtocolVersion) > -1)
-                return Result.Ok<IMinecraftCom>(new Protocol16Handler(Client, ProtocolVersion, Handler));
+                return Result.Ok<IMinecraftCom>(new Protocol16Handler(client, ProtocolVersion, Handler));
             int[] supportedVersions_Protocol18 = { 4, 5, 47, 107, 108, 109, 110, 210, 315, 316, 335, 338, 340, 393, 401, 404, 477, 480, 485, 490, 498, 573, 575, 578, 735, 736, 751, 753, 754, 755 };
             if (Array.IndexOf(supportedVersions_Protocol18, ProtocolVersion) > -1)
-                return Result.Ok<IMinecraftCom>(new Protocol18Handler(Client, ProtocolVersion, Handler, forgeInfo));
+                return Result.Ok<IMinecraftCom>(new Protocol18Handler(settings, client, ProtocolVersion, Handler, forgeInfo));
             return Result.Fail("Version not supported");
         }
 
@@ -315,6 +315,7 @@ namespace MinecraftClient.Protocol {
 
         public enum LoginResult { OtherError, ServiceUnavailable, SSLError, Success, WrongPassword, AccountMigrated, NotPremium, LoginRequired, InvalidToken, InvalidResponse, NullError, UserCancel };
         public enum AccountType { Mojang, Microsoft };
+        public enum LoginMethod { MCC, Browser };
 
         /// <summary>
         /// Allows to login to a premium Minecraft account using the Yggdrasil authentication scheme.
@@ -323,17 +324,17 @@ namespace MinecraftClient.Protocol {
         /// <param name="pass">Password</param>
         /// <param name="session">In case of successful login, will contain session information for multiplayer</param>
         /// <returns>Returns the status of the login (Success, Failure, etc.)</returns>
-        public static async Task<Result<SessionToken>> GetLogin(string user, string pass, AccountType type) {
+        public static async Task<Result<SessionToken>> GetLogin(ProxyHandler proxyHandler, string user, string pass, AccountType type, LoginMethod loginMethod) {
             SessionToken s = new SessionToken();
 
             switch (type) {
                 case AccountType.Microsoft:
-                    if (Settings.LoginMethod == "mcc")
-                        return MicrosoftMCCLogin(user, pass);
+                    if (loginMethod == LoginMethod.MCC)
+                        return MicrosoftMCCLogin(proxyHandler, user, pass);
                     else
-                        return MicrosoftBrowserLogin();
+                        return MicrosoftBrowserLogin(proxyHandler);
                 case AccountType.Mojang:
-                    return await MojangLogin(user, pass);
+                    return await MojangLogin(proxyHandler, user, pass);
                     break;
                 default:
                     throw new NotImplementedException("This account type is not implemented!");
@@ -347,12 +348,12 @@ namespace MinecraftClient.Protocol {
         /// <param name="pass"></param>
         /// <param name="session"></param>
         /// <returns></returns>
-        private static async Task<Result<SessionToken>> MojangLogin(string user, string pass) {
+        private static async Task<Result<SessionToken>> MojangLogin(ProxyHandler _proxyHandler, string user, string pass) {
             var session = new SessionToken() {ClientID = Guid.NewGuid().ToString().Replace("-", "")};
             string json_request = "{\"agent\": { \"name\": \"Minecraft\", \"version\": 1 }, \"username\": \"" +
                                   JsonEncode(user) + "\", \"password\": \"" + JsonEncode(pass) +
                                   "\", \"clientToken\": \"" + JsonEncode(session.ClientID) + "\" }";
-            var requestResult = await DoHTTPSPostAsync("authserver.mojang.com", "/authenticate", json_request);
+            var requestResult = await DoHTTPSPostAsync(_proxyHandler, "authserver.mojang.com", "/authenticate", json_request);
             if (requestResult.IsFailed)
                 return Result.Fail(requestResult.Errors[0].Message);
             
@@ -398,20 +399,18 @@ namespace MinecraftClient.Protocol {
         /// <param name="password"></param>
         /// <param name="session"></param>
         /// <returns></returns>
-        private static Result<SessionToken> MicrosoftMCCLogin(string email, string password) {
-            var ms = new XboxLive();
+        private static Result<SessionToken> MicrosoftMCCLogin(ProxyHandler _proxyHandler, string email, string password) {
+            var ms = new XboxLive(_proxyHandler);
             try
             {
                 var msaResponse = ms.UserLogin(email, password, ms.PreAuth());
-                return MicrosoftLogin(msaResponse);
+                return MicrosoftLogin(_proxyHandler, msaResponse);
             }
             catch (Exception e)
             {
                 SentrySdk.CaptureException(e);
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
-                if (Settings.DebugMessages) {
-                    ConsoleIO.WriteLineFormatted("§c" + e.StackTrace);
-                }
+                Serilog.Log.Debug(e.StackTrace);
                 return Result.Fail(new LoginFailure(LoginResult.WrongPassword)); // Might not always be wrong password
             }
         }
@@ -426,10 +425,10 @@ namespace MinecraftClient.Protocol {
         /// </remarks>
         /// <param name="session"></param>
         /// <returns></returns>
-        public static Result<SessionToken> MicrosoftBrowserLogin()
+        public static Result<SessionToken> MicrosoftBrowserLogin(ProxyHandler _proxyHandler)
         {
             var session = new SessionToken();
-            var ms = new XboxLive();
+            var ms = new XboxLive(_proxyHandler);
             string[] askOpenLink =
             {
                 "Copy the following link to your browser and login to your Microsoft Account",
@@ -468,26 +467,23 @@ namespace MinecraftClient.Protocol {
             };
             try
             {
-                return MicrosoftLogin(msaResponse);
+                return MicrosoftLogin(_proxyHandler, msaResponse);
             }
             catch (Exception e)
             {
                 SentrySdk.CaptureException(e);
                 session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
-                if (Settings.DebugMessages)
-                {
-                    ConsoleIO.WriteLineFormatted("§c" + e.StackTrace);
-                }
+                Serilog.Log.Debug(e.StackTrace);
                 return Result.Fail(new LoginFailure(LoginResult.WrongPassword)); // Might not always be wrong password
             }
         }
 
-        private static Result<SessionToken> MicrosoftLogin(XboxLive.UserLoginResponse msaResponse)
+        private static Result<SessionToken> MicrosoftLogin(ProxyHandler _proxyHandler, XboxLive.UserLoginResponse msaResponse)
         {
             var session = new SessionToken() { ClientID = Guid.NewGuid().ToString().Replace("-", "") };
-            var ms = new XboxLive();
-            var mc = new MinecraftWithXbox();
+            var ms = new XboxLive(_proxyHandler);
+            var mc = new MinecraftWithXbox(_proxyHandler);
 
             try
             {
@@ -511,9 +507,7 @@ namespace MinecraftClient.Protocol {
             {
                 SentrySdk.CaptureException(e);
                 ConsoleIO.WriteLineFormatted("§cMicrosoft authenticate failed: " + e.Message);
-                if (Settings.DebugMessages) {
-                    ConsoleIO.WriteLineFormatted("§c" + e.StackTrace);
-                }
+                Serilog.Log.Debug(e.StackTrace);
                 return Result.Fail(new LoginFailure(LoginResult.WrongPassword)); // Might not always be wrong password
             }
         }
@@ -523,10 +517,10 @@ namespace MinecraftClient.Protocol {
         /// </summary>
         /// <param name="session">Session token to validate</param>
         /// <returns>Returns the status of the token (Valid, Invalid, etc.)</returns>
-        public static async Task<Result<LoginResult>> GetTokenValidation(SessionToken session) {
+        public static async Task<Result<LoginResult>> GetTokenValidation(ProxyHandler _proxyHandler, SessionToken session) {
             string json_request = "{\"accessToken\": \"" + JsonEncode(session.ID) + "\", \"clientToken\": \"" +
                                   JsonEncode(session.ClientID) + "\" }";
-            var requestResult = await DoHTTPSPostAsync("authserver.mojang.com", "/validate", json_request);
+            var requestResult = await DoHTTPSPostAsync(_proxyHandler, "authserver.mojang.com", "/validate", json_request);
             if (requestResult.IsFailed)
                 return Result.Fail(requestResult.Errors[0].Message);
             
@@ -547,13 +541,13 @@ namespace MinecraftClient.Protocol {
         /// <param name="user">Login</param>
         /// <param name="session">In case of successful token refresh, will contain session information for multiplayer</param>
         /// <returns>Returns the status of the new token request (Success, Failure, etc.)</returns>
-        public static async Task<Result<SessionToken>> GetNewToken(SessionToken currentsession) {
+        public static async Task<Result<SessionToken>> GetNewToken(ProxyHandler _proxyHandler, SessionToken currentsession) {
             var session = new SessionToken();
             string json_request = "{ \"accessToken\": \"" + JsonEncode(currentsession.ID) + "\", \"clientToken\": \"" +
                                   JsonEncode(currentsession.ClientID) + "\", \"selectedProfile\": { \"id\": \"" +
                                   JsonEncode(currentsession.PlayerID) + "\", \"name\": \"" +
                                   JsonEncode(currentsession.PlayerName) + "\" } }";
-            var requestResult = await DoHTTPSPostAsync("authserver.mojang.com", "/refresh", json_request);
+            var requestResult = await DoHTTPSPostAsync(_proxyHandler, "authserver.mojang.com", "/refresh", json_request);
             if (requestResult.IsFailed)
                 return Result.Fail(requestResult.Errors[0].Message);
 
@@ -583,10 +577,10 @@ namespace MinecraftClient.Protocol {
         /// <param name="accesstoken">Session ID</param>
         /// <param name="serverhash">Server ID</param>
         /// <returns>TRUE if session was successfully checked</returns>
-        public static async Task<Result> SessionCheckAsync(string uuid, string accesstoken, string serverhash) {
+        public static async Task<Result> SessionCheckAsync(ProxyHandler _proxyHandler, string uuid, string accesstoken, string serverhash) {
             string json_request = "{\"accessToken\":\"" + accesstoken + "\",\"selectedProfile\":\"" + uuid +
                                   "\",\"serverId\":\"" + serverhash + "\"}";
-            var result = await DoHTTPSPostAsync("sessionserver.mojang.com", "/session/minecraft/join", json_request);
+            var result = await DoHTTPSPostAsync(_proxyHandler, "sessionserver.mojang.com", "/session/minecraft/join", json_request);
             if (result.IsFailed)
                 return Result.Fail(result.Errors[0].Message);
             if (result.IsSuccess || result.IsFailed && result.Errors[1].Message == "200")
@@ -602,10 +596,10 @@ namespace MinecraftClient.Protocol {
         /// <param name="uuid">Player UUID</param>
         /// <param name="accesstoken">Access token</param>
         /// <returns>List of ID of available Realms worlds</returns>
-        public static async Task<Result<List<string>>> RealmsListWorldsAsync(string username, string uuid, string accesstoken)
+        public static async Task<Result<List<string>>> RealmsListWorldsAsync(ProxyHandler _proxyHandler, string username, string uuid, string accesstoken)
         {
-            string cookies = String.Format("sid=token:{0}:{1};user={2};version={3}", accesstoken, uuid, username, Program.MCHighestVersion);
-            var getResult = await DoHTTPSGetAsync("pc.realms.minecraft.net", "/worlds", cookies);
+            string cookies = String.Format("sid=token:{0}:{1};user={2};version={3}", accesstoken, uuid, username, Const.MCHighestVersion);
+            var getResult = await DoHTTPSGetAsync(_proxyHandler, "pc.realms.minecraft.net", "/worlds", cookies);
             if (getResult.IsFailed)
                 return Result.Fail(getResult.Errors[0].Message);
             
@@ -655,9 +649,9 @@ namespace MinecraftClient.Protocol {
         /// <param name="uuid">Player UUID</param>
         /// <param name="accesstoken">Access token</param>
         /// <returns>Server address (host:port) or empty string if failure</returns>
-        public static async Task<Result<string>> GetRealmsWorldServerAddressAsync(string worldId, string username, string uuid, string accesstoken) {
-            string cookies = String.Format("sid=token:{0}:{1};user={2};version={3}", accesstoken, uuid, username, Program.MCHighestVersion);
-            var getAsync = await DoHTTPSGetAsync("pc.realms.minecraft.net", "/worlds/v1/" + worldId + "/join/pc", cookies);
+        public static async Task<Result<string>> GetRealmsWorldServerAddressAsync(ProxyHandler _proxyHandler, string worldId, string username, string uuid, string accesstoken) {
+            string cookies = String.Format("sid=token:{0}:{1};user={2};version={3}", accesstoken, uuid, username, Const.MCHighestVersion);
+            var getAsync = await DoHTTPSGetAsync(_proxyHandler, "pc.realms.minecraft.net", "/worlds/v1/" + worldId + "/join/pc", cookies);
             if (getAsync.IsFailed)
                 return Result.Fail(Translations.Get("error.realms.access_denied"));
 
@@ -675,7 +669,7 @@ namespace MinecraftClient.Protocol {
         /// <param name="cookies">Cookies for making the request</param>
         /// <param name="result">Request result</param>
         /// <returns>HTTP Status code</returns>
-        private static async Task<Result<HttpRequestResult>> DoHTTPSGetAsync(string host, string endpoint, string cookies)
+        private static async Task<Result<HttpRequestResult>> DoHTTPSGetAsync(ProxyHandler _proxyHandler, string host, string endpoint, string cookies)
         {
             List<String> http_request = new List<string>();
             http_request.Add("GET " + endpoint + " HTTP/1.1");
@@ -688,7 +682,7 @@ namespace MinecraftClient.Protocol {
             http_request.Add("Connection: close");
             http_request.Add("");
             http_request.Add("");
-            return await DoHTTPSRequestAsync(http_request, host);
+            return await DoHTTPSRequestAsync(_proxyHandler, http_request, host);
         }
 
         /// <summary>
@@ -699,7 +693,7 @@ namespace MinecraftClient.Protocol {
         /// <param name="request">Request payload</param>
         /// <param name="result">Request result</param>
         /// <returns>HTTP Status code</returns>
-        private static async Task<Result<HttpRequestResult>> DoHTTPSPostAsync(string host, string endpoint, string request)
+        private static async Task<Result<HttpRequestResult>> DoHTTPSPostAsync(ProxyHandler _proxyHandler,string host, string endpoint, string request)
         {
             List<String> http_request = new List<string>();
             http_request.Add("POST " + endpoint + " HTTP/1.1");
@@ -710,7 +704,7 @@ namespace MinecraftClient.Protocol {
             http_request.Add("Connection: close");
             http_request.Add("");
             http_request.Add(request);
-            return await DoHTTPSRequestAsync(http_request, host);
+            return await DoHTTPSRequestAsync(_proxyHandler, http_request, host);
         }
 
         /// <summary>
@@ -721,34 +715,29 @@ namespace MinecraftClient.Protocol {
         /// <param name="host">Host to connect to</param>
         /// <param name="result">Request result</param>
         /// <returns>HTTP Status code</returns>
-        private static async Task<Result<HttpRequestResult>> DoHTTPSRequestAsync(List<string> headers, string host) {
+        private static async Task<Result<HttpRequestResult>> DoHTTPSRequestAsync(ProxyHandler _proxyHandler, List<string> headers, string host) {
             string? postResult = null;
             int statusCode = 520;
 
-            if (Settings.DebugMessages)
-                ConsoleIO.WriteLineFormatted(Translations.Get("debug.request", host));
+            Serilog.Log.Debug(Translations.Get("debug.request", host));
 
-            var clientResult = ProxyHandler.CreateTcpClient(host, 443, true).Result;
+            var clientResult = await _proxyHandler.CreateTcpClient(host, 443, true);
             if (clientResult.IsFailed)
                 return Result.Fail(clientResult.Errors[0].Message).WithError("520");
 
             SslStream stream = new SslStream(clientResult.Value.GetStream());
             await stream.AuthenticateAsClientAsync(host);
 
-            if (Settings.DebugMessages)
-                foreach (string line in headers)
-                    ConsoleIO.WriteLineFormatted("§8> " + line);
+            foreach (string line in headers)
+               Serilog.Log.Debug(line);
 
             await stream.WriteAsync(Encoding.ASCII.GetBytes(String.Join("\r\n", headers.ToArray())));
             System.IO.StreamReader sr = new System.IO.StreamReader(stream);
             string raw_result = await sr.ReadToEndAsync();
 
-            if (Settings.DebugMessages) {
-                ConsoleIO.WriteLine("");
-                foreach (string line in raw_result.Split('\n'))
-                    ConsoleIO.WriteLineFormatted("§8< " + line);
-            }
-            
+            foreach (string line in raw_result.Split('\n'))
+                Serilog.Log.Debug(line);
+
             if (raw_result.StartsWith("HTTP/1.1")) {
                 postResult = raw_result.Substring(raw_result.IndexOf("\r\n\r\n") + 4);
                 statusCode = Settings.str2int(raw_result.Split(' ')[1]);

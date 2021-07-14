@@ -19,8 +19,8 @@ namespace MinecraftClient.ChatBots
         /// </summary>
         public override void Initialize()
         {
-            dictionary = LoadDistinctEntriesFromFile(Settings.Alerts_MatchesFile);
-            excludelist = LoadDistinctEntriesFromFile(Settings.Alerts_ExcludesFile);
+            dictionary = LoadDistinctEntriesFromFile(Handler.Settings.Alerts_MatchesFile);
+            excludelist = LoadDistinctEntriesFromFile(Handler.Settings.Alerts_ExcludesFile);
         }
 
         /// <summary>
@@ -38,7 +38,7 @@ namespace MinecraftClient.ChatBots
                 //Show an alert for each alert item found in text, if any
                 foreach (string alert in dictionary.Where(alert => text.Contains(alert)))
                 {
-                    if (Settings.Alerts_Beep_Enabled)
+                    if (Handler.Settings.Alerts_Beep_Enabled)
                         Console.Beep(); //Text found !
 
                     if (ConsoleIO.BasicIO) //Using a GUI? Pass text as is.

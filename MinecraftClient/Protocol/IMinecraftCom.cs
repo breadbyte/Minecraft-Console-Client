@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using MinecraftClient.Crypto;
 using MinecraftClient.Mapping;
 using MinecraftClient.Inventory;
+using MinecraftClient.Proxy;
 
 namespace MinecraftClient.Protocol
 {
@@ -22,7 +23,7 @@ namespace MinecraftClient.Protocol
         /// Start the login procedure once connected to the server
         /// </summary>
         /// <returns>True if login was successful</returns>
-        Task<bool> Login();
+        Task<bool> Login(ProxyHandler proxyHandler);
 
         /// <summary>
         /// Disconnect from the server

@@ -39,17 +39,17 @@ namespace MinecraftClient.ChatBots
         public override void Initialize()
         {
             McClient.ReconnectionAttemptsLeft = attempts;
-            if (Settings.AutoRelog_IgnoreKickMessage)
+            if (Handler.Settings.AutoRelog_IgnoreKickMessage)
             {
                 LogDebugToConsoleTranslated("bot.autoRelog.no_kick_msg");
             }
             else
             {
-                if (System.IO.File.Exists(Settings.AutoRelog_KickMessagesFile))
+                if (System.IO.File.Exists(Handler.Settings.AutoRelog_KickMessagesFile))
                 {
-                    LogDebugToConsoleTranslated("bot.autoRelog.loading", System.IO.Path.GetFullPath(Settings.AutoRelog_KickMessagesFile));
+                    LogDebugToConsoleTranslated("bot.autoRelog.loading", System.IO.Path.GetFullPath(Handler.Settings.AutoRelog_KickMessagesFile));
 
-                    dictionary = System.IO.File.ReadAllLines(Settings.AutoRelog_KickMessagesFile, Encoding.UTF8);
+                    dictionary = System.IO.File.ReadAllLines(Handler.Settings.AutoRelog_KickMessagesFile, Encoding.UTF8);
 
                     for (int i = 0; i < dictionary.Length; i++)
                     {
@@ -59,7 +59,7 @@ namespace MinecraftClient.ChatBots
                 }
                 else
                 {
-                    LogToConsoleTranslated("bot.autoRelog.not_found", System.IO.Path.GetFullPath(Settings.AutoRelog_KickMessagesFile));
+                    LogToConsoleTranslated("bot.autoRelog.not_found", System.IO.Path.GetFullPath(Handler.Settings.AutoRelog_KickMessagesFile));
 
                     LogDebugToConsoleTranslated("bot.autoRelog.curr_dir", System.IO.Directory.GetCurrentDirectory());
                 }
@@ -79,7 +79,7 @@ namespace MinecraftClient.ChatBots
 
                 LogDebugToConsoleTranslated("bot.autoRelog.disconnect_msg", message);
 
-                if (Settings.AutoRelog_IgnoreKickMessage)
+                if (Handler.Settings.AutoRelog_IgnoreKickMessage)
                 {
                     LaunchDelayedReconnection(null);
                     return true;
@@ -109,15 +109,10 @@ namespace MinecraftClient.ChatBots
             ReconnectToTheServer();
         }
 
-        public static bool OnDisconnectStatic(DisconnectReason reason, string message)
-        {
-            if (Settings.AutoRelog_Enabled)
-            {
-                AutoRelog bot = new AutoRelog(Settings.AutoRelog_Delay_Min, Settings.AutoRelog_Delay_Max, Settings.AutoRelog_Retries);
-                bot.Initialize();
-                return bot.OnDisconnect(reason, message);
-            }
-            return false;
+        public static bool OnDisconnectStatic(DisconnectReason reason, string message, int delayMin, int delayMax, int retries) {
+            AutoRelog bot = new AutoRelog(delayMin, delayMax, retries);
+            bot.Initialize();
+            return bot.OnDisconnect(reason, message);
         }
     }
 }

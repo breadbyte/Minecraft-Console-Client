@@ -27,7 +27,7 @@ namespace MinecraftClient
         /// <param name="run">Set to false to compile and cache the script without launching it</param>
         /// <exception cref="CSharpException">Thrown if an error occured</exception>
         /// <returns>Result of the execution, returned by the script</returns>
-        public static object? Run(ChatBot apiHandler, string[] lines, string[] args, Dictionary<string, object> localVars, bool run = true)
+        public static object? Run(ChatBot apiHandler, string[] lines, string[] args, Dictionary<string, object> localVars, bool cache = true, bool run = true)
         {
             //Script compatibility check for handling future versions differently
             if (lines.Length < 1 || lines[0] != "//MCCScript 1.0")
@@ -45,7 +45,7 @@ namespace MinecraftClient
             lock (CompileCache)
             {
                 ///Process and compile script only if not already compiled
-                if (!Settings.CacheScripts || !CompileCache.ContainsKey(scriptHash))
+                if (!cache || !CompileCache.ContainsKey(scriptHash))
                 {
                     //Process different sections of the script file
                     bool scriptMain = true;
@@ -113,10 +113,10 @@ namespace MinecraftClient
 
                     //Retrieve compiled assembly
                     assembly = result.Assembly;
-                    if (Settings.CacheScripts)
+                    if (cache)
                         CompileCache[scriptHash] = assembly!;
                 }
-                else if (Settings.CacheScripts)
+                else if (cache)
                     assembly = CompileCache[scriptHash];
             }
 
@@ -295,7 +295,7 @@ namespace MinecraftClient
         {
             if (localVars != null && localVars.ContainsKey(varName))
                 return localVars[varName];
-            return Settings.GetVar(varName);
+            return Handler.Settings.GetVar(varName);
         }
 
         /// <summary>
@@ -307,7 +307,7 @@ namespace MinecraftClient
         {
             if (localVars != null && localVars.ContainsKey(varName))
                 localVars.Remove(varName);
-            return Settings.SetVar(varName, varValue);
+            return Handler.Settings.SetVar(varName, varValue);
         }
 
         /// <summary>
@@ -349,7 +349,7 @@ namespace MinecraftClient
         /// <returns>True if the account was found and loaded</returns>
         public bool SetAccount(string accountAlias, bool andReconnect = false)
         {
-            bool result = Settings.SetAccount(accountAlias);
+            bool result = Handler.Settings.SetAccount(accountAlias);
             if (result && andReconnect)
                 ReconnectToTheServer();
             return result;
@@ -362,7 +362,7 @@ namespace MinecraftClient
         /// <returns>True if the server IP was valid and loaded, false otherwise</returns>
         public bool SetServer(string server, bool andReconnect = false)
         {
-            bool result = Settings.SetServerIP(server);
+            bool result = Handler.Settings.SetServerIP(server);
             if (result && andReconnect)
                 ReconnectToTheServer();
             return result;

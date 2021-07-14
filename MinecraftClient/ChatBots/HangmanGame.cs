@@ -56,7 +56,7 @@ namespace MinecraftClient.ChatBots
 
             if (IsPrivateMessage(text, ref message, ref username))
             {
-                if (Settings.Bots_Owners.Contains(username.ToLower()))
+                if (Handler.Settings.Bots_Owners.Contains(username.ToLower()))
                 {
                     switch (message)
                     {
@@ -141,14 +141,14 @@ namespace MinecraftClient.ChatBots
 
         private string chooseword()
         {
-            if (System.IO.File.Exists(English ? Settings.Hangman_FileWords_EN : Settings.Hangman_FileWords_FR))
+            if (System.IO.File.Exists(English ? Handler.Settings.Hangman_FileWords_EN : Handler.Settings.Hangman_FileWords_FR))
             {
-                string[] dico = System.IO.File.ReadAllLines(English ? Settings.Hangman_FileWords_EN : Settings.Hangman_FileWords_FR, Encoding.UTF8);
+                string[] dico = System.IO.File.ReadAllLines(English ? Handler.Settings.Hangman_FileWords_EN : Handler.Settings.Hangman_FileWords_FR, Encoding.UTF8);
                 return dico[new Random().Next(dico.Length)];
             }
             else
             {
-                LogToConsole(English ? "File not found: " + Settings.Hangman_FileWords_EN : "Fichier introuvable : " + Settings.Hangman_FileWords_FR);
+                LogToConsole(English ? "File not found: " + Handler.Settings.Hangman_FileWords_EN : "Fichier introuvable : " + Handler.Settings.Hangman_FileWords_FR);
                 return English ? "WORDSAREMISSING" : "DICOMANQUANT";
             }
         }

@@ -31,7 +31,7 @@ namespace MinecraftClient.ChatBots
             count++;
             if (count == timeping)
             {
-                SendText(Settings.AntiAFK_Command);
+                SendText(Handler.Settings.AntiAFK_Command);
                 count = 0;
             }
         }

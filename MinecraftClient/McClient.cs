@@ -106,6 +106,7 @@ namespace MinecraftClient
         public string GetUsername() { return playerSession.PlayerName; }
         public string GetUserUUID() { return playerSession.PlayerID; }
         public string GetSessionID() { return playerSession.ID; }
+        public string GetPlayerID() { return playerSession.PlayerID; }
         public Location GetCurrentLocation() { return location; }
         public float GetYaw() { return playerYaw; }
         public float GetPitch() { return playerPitch; }
@@ -127,7 +128,8 @@ namespace MinecraftClient
         Tuple<Task, CancellationTokenSource>? cmdprompt = null;
         Tuple<Task, CancellationTokenSource>? timeoutdetector = null;
         private CancellationToken cancel;
-
+        private ProxyHandler proxyHandler;
+        public Settings Settings;
         public ILogger Log;
 
         /// <summary>
@@ -139,9 +141,10 @@ namespace MinecraftClient
         /// <param name="server_ip">The server IP</param>
         /// <param name="port">The server port to use</param>
         /// <param name="protocolversion">Minecraft protocol version to use</param>
-        public McClient(SessionToken session, CancellationToken cancellationToken)
+        public McClient(ProxyHandler handler, Settings settings, SessionToken session, CancellationToken cancellationToken)
         {
-            Task.Factory.StartNew(async () => await StartClient(session, false, "", cancellationToken), cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            // todo singlecommand mode
+            InitializeClient(handler, settings, session, false, "", cancellationToken);
         }
 
         /// <summary>
@@ -155,23 +158,26 @@ namespace MinecraftClient
         /// <param name="uuid">The player's UUID for online-mode authentication</param>
         /// <param name="singlecommand">If set to true, the client will send a single command and then disconnect from the server</param>
         /// <param name="command">The text or command to send. Will only be sent if singlecommand is set to true.</param>
-        private async Task StartClient(SessionToken session, bool singlecommand, string command, CancellationToken cancellationToken) {
+        private void InitializeClient(ProxyHandler handler, Settings settings, SessionToken session, bool singlecommand, string command, CancellationToken cancellationToken) {
             playerSession = session;
-            
-            terrainAndMovementsEnabled = Settings.TerrainAndMovements;
-            inventoryHandlingEnabled = Settings.InventoryHandling;
-            entityHandlingEnabled = Settings.EntityHandling;
+            Settings = settings;
+            proxyHandler = handler;
+            settings.Username = session.PlayerName;
+
+            terrainAndMovementsEnabled = settings.TerrainAndMovements;
+            inventoryHandlingEnabled = settings.InventoryHandling;
+            entityHandlingEnabled = settings.EntityHandling;
 
             bool retry = false;
 
-            this.Log = Settings.LogToFile 
-                ? new FileLogLogger(Settings.ExpandVars(Settings.LogFile), Settings.PrependTimestamp) 
+            this.Log = settings.LogToFile 
+                ? new FileLogLogger(settings.ExpandVars(settings.LogFile), settings.PrependTimestamp) 
                 : new FilteredLogger();
-            Log.DebugEnabled = Settings.DebugMessages;
-            Log.InfoEnabled = Settings.InfoMessages;
-            Log.ChatEnabled = Settings.ChatMessages;
-            Log.WarnEnabled = Settings.WarningMessages;
-            Log.ErrorEnabled = Settings.ErrorMessages;
+            Log.DebugEnabled = settings.DebugMessages;
+            Log.InfoEnabled = settings.InfoMessages;
+            Log.ChatEnabled = settings.ChatMessages;
+            Log.WarnEnabled = settings.WarningMessages;
+            Log.ErrorEnabled = settings.ErrorMessages;
 
             if (!singlecommand)
                 /* Load commands from Commands namespace */
@@ -223,7 +229,7 @@ namespace MinecraftClient
                 if (protocolversion != 0)
                     Translations.WriteLine("mcc.forge");
                 else Translations.WriteLine("mcc.retrieve");
-                var serverInfo = await ProtocolHandler.GetServerInfo(Settings.ServerIP, Settings.ServerPort);
+                var serverInfo = await ProtocolHandler.GetServerInfo(proxyHandler, Settings.GetProxySettings(), Settings.ServerIP, Settings.ServerPort);
                 if (serverInfo.IsFailed) {
                     return Result.Fail(new DisconnectError(ChatBot.DisconnectReason.ConnectionLost, Translations.Get("error.ping")));
                 }
@@ -269,7 +275,7 @@ namespace MinecraftClient
                 }
             }
 
-            var handlerResult = ProtocolHandler.GetProtocolHandler(sessionClient, serverInfo.Value.ProtocolVersion, serverInfo.Value.ForgeInfo, this);
+            var handlerResult = ProtocolHandler.GetProtocolHandler(sessionClient, Settings, serverInfo.Value.ProtocolVersion, serverInfo.Value.ForgeInfo, this);
             if (handlerResult.IsFailed)
                 return Result.Fail(
                     $"{Translations.Get("exception.version_unsupport")} {serverInfo.Value.ProtocolVersion}");
@@ -289,7 +295,7 @@ namespace MinecraftClient
             timeoutdetector = new(timeoutTask, cancelInteraction);
 
             try {
-                if (await handler.Login()) {
+                if (await handler.Login(proxyHandler)) {
                     foreach (ChatBot bot in botsOnHold)
                         BotLoad(bot, false);
                     botsOnHold.Clear();
@@ -314,12 +320,13 @@ namespace MinecraftClient
         }
 
         private async Task<Result> InitTCPClient(string host, ushort port) {
+            // todo make a tcpclient a constructor requirement to reduce dependencies
             // Client is already initialized, no need to do anything more
             if (sessionClient != null && sessionClient.Connected)
                 return Result.Ok();
             
             // Create a new client.
-            var clientResult = await ProxyHandler.CreateTcpClient(host, port);
+            var clientResult = await proxyHandler.CreateTcpClient(host, port);
             if (clientResult.IsFailed)
                 return Result.Fail(clientResult.Errors[0].Message);
 
@@ -538,7 +545,7 @@ namespace MinecraftClient
                 }
             }
             if (!will_restart)
-                Program.HandleFailure();
+                Program.HandleFailure(Settings);
         }
 
         #endregion
@@ -678,7 +685,7 @@ namespace MinecraftClient
             }
             else if (cmds.ContainsKey(command_name))
             {
-                response_msg = cmds[command_name].Run(this, command, localVars);
+                response_msg = cmds[command_name].Run(Settings, this, command, localVars);
                 foreach (ChatBot bot in bots.ToArray())
                 {
                     try

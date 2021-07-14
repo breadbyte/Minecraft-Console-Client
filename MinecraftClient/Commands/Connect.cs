@@ -11,20 +11,21 @@ namespace MinecraftClient.Commands
         public override string CmdUsage { get { return "connect <server> [account]"; } }
         public override string CmdDesc { get { return "cmd.connect.desc"; } }
 
-        public override string Run(McClient handler, string command, Dictionary<string, object> localVars)
+        public override string Run(Settings settings, McClient handler, string command, Dictionary<string, object> localVars)
         {
             if (hasArg(command))
             {
                 string[] args = getArgs(command);
                 if (args.Length > 1)
                 {
-                    if (!Settings.SetAccount(args[1]))
+                    // Check if account is in our registry.
+                    if (!settings.SetAccount(args[1]))
                     {
                         return Translations.Get("cmd.connect.unknown", args[1]);
                     }
                 }
 
-                if (Settings.SetServerIP(args[0]))
+                if (settings.SetServerIP(args[0]))
                 {
                     Program.Restart();
                     return "";

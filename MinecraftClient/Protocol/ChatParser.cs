@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using FluentResults;
 using Sentry;
 
 namespace MinecraftClient.Protocol
@@ -10,8 +11,14 @@ namespace MinecraftClient.Protocol
     /// This class parses JSON chat data from MC 1.6+ and returns the appropriate string to be printed.
     /// </summary>
 
-    static class ChatParser
-    {
+    static class ChatParser {
+
+        static ChatParser() {
+            Language = System.Globalization.CultureInfo.CurrentCulture.Name.Replace('-', '_');
+            InitRules();
+            RulesInitialized = true;
+        }
+
         /// <summary>
         /// The main function to convert text from MC 1.6+ JSON to MC 1.5.2 formatted text
         /// </summary>
@@ -57,6 +64,11 @@ namespace MinecraftClient.Protocol
         /// Specify whether translation rules have been loaded
         /// </summary>
         private static bool RulesInitialized = false;
+        
+        /// <summary>
+        /// Specify what language is being used.
+        /// </summary>
+        private static string Language;
 
         /// <summary>
         /// Set of translation rules for formatting text
@@ -69,6 +81,11 @@ namespace MinecraftClient.Protocol
         /// </summary>
         public static void InitTranslations() { if (!RulesInitialized) { InitRules(); RulesInitialized = true; } }
 
+        public static void ChangeLanguage(string language) {
+            Language = language;
+            InitRules();
+        }
+        
         /// <summary>
         /// Internal rule initialization method. Looks for local rule file or download it from Mojang asset servers.
         /// </summary>
@@ -88,21 +105,19 @@ namespace MinecraftClient.Protocol
             if (!System.IO.Directory.Exists("lang"))
                 System.IO.Directory.CreateDirectory("lang");
 
-            string Language_File = "lang" + (Program.isUsingMono ? '/' : '\\') + Settings.Language + ".lang";
+            string Language_File = "lang" + (Program.isUsingMono ? '/' : '\\') + Language + ".lang";
 
             //File not found? Try downloading language file from Mojang's servers?
-            if (!System.IO.File.Exists(Language_File))
-            {
-                ConsoleIO.WriteLineFormatted(Translations.Get("chat.download", Settings.Language));
+            if (!System.IO.File.Exists(Language_File)) {
+                ConsoleIO.WriteLineFormatted(Translations.Get("chat.download", Language));
                 try
                 {
-                    string assets_index = DownloadString(Settings.TranslationsFile_Website_Index);
-                    string[] tmp = assets_index.Split(new string[] { "minecraft/lang/" + Settings.Language.ToLower() + ".json" }, StringSplitOptions.None);
+                    string assets_index = DownloadString(Const.TranslationsFile_Website_Index);
+                    string[] tmp = assets_index.Split(new string[] { "minecraft/lang/" + Language.ToLower() + ".json" }, StringSplitOptions.None);
                     tmp = tmp[1].Split(new string[] { "hash\": \"" }, StringSplitOptions.None);
                     string hash = tmp[1].Split('"')[0]; //Translations file identifier on Mojang's servers
-                    string translation_file_location = Settings.TranslationsFile_Website_Download + '/' + hash.Substring(0, 2) + '/' + hash;
-                    if (Settings.DebugMessages)
-                        ConsoleIO.WriteLineFormatted(Translations.Get("chat.request", translation_file_location));
+                    string translation_file_location = Const.TranslationsFile_Website_Download + '/' + hash.Substring(0, 2) + '/' + hash;
+                    Serilog.Log.Debug(Translations.Get("chat.request", translation_file_location));
 
                     StringBuilder stringBuilder = new StringBuilder();
                     foreach (KeyValuePair<string, Json.JSONData> entry in Json.ParseJson(DownloadString(translation_file_location)).Properties)
@@ -122,9 +137,9 @@ namespace MinecraftClient.Protocol
 
             //Download Failed? Defaulting to en_GB.lang if the game is installed
             if (!System.IO.File.Exists(Language_File) //Try en_GB.lang
-              && System.IO.File.Exists(Settings.TranslationsFile_FromMCDir))
+              && System.IO.File.Exists(Const.TranslationsFile_FromMCDir))
             {
-                Language_File = Settings.TranslationsFile_FromMCDir;
+                Language_File = Const.TranslationsFile_FromMCDir;
                 Translations.WriteLineFormatted("chat.from_dir");
             }
 
@@ -144,14 +159,14 @@ namespace MinecraftClient.Protocol
                     }
                 }
 
-                if (Settings.DebugMessages)
-                    Translations.WriteLineFormatted("chat.loaded");
+                Serilog.Log.Debug(Translations.Get("chat.loaded"));
             }
             else //No external dictionnary found.
             {
                 ConsoleIO.WriteLineFormatted(Translations.Get("chat.not_found", Language_File));
             }
         }
+
 
         /// <summary>
         /// Format text using a specific formatting rule.
@@ -233,7 +248,7 @@ namespace MinecraftClient.Protocol
                         {
                             links.Add(clickEvent.Properties["value"].StringValue);
                         }
-                     }
+                    }
                     if (data.Properties.ContainsKey("extra"))
                     {
                         Json.JSONData[] extras = data.Properties["extra"].DataArray.ToArray();

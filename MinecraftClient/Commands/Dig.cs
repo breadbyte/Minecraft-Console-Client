@@ -13,7 +13,8 @@ namespace MinecraftClient.Commands
         public override string CmdUsage { get { return "dig <x> <y> <z>"; } }
         public override string CmdDesc { get { return "cmd.dig.desc"; } }
 
-        public override string Run(McClient handler, string command, Dictionary<string, object> localVars)
+        public override string Run(Settings settings, McClient handler, string command,
+            Dictionary<string, object> localVars)
         {
             if (!handler.GetTerrainEnabled())
                 return Translations.Get("extra.terrainandmovement_required");

@@ -6,19 +6,32 @@ using System.Text.RegularExpressions;
 
 namespace MinecraftClient.Logger
 {
-    public class FilteredLogger : LoggerBase
-    {
+    public class FilteredLogger : LoggerBase {
+        private string? ChatFilterRegex;
+        private string? DebugFilterRegex;
+        private Settings.FilterModeEnum? FilterMode;
+        public FilteredLogger() { }
+        public FilteredLogger(Settings.FilterModeEnum filterMode, string? chatFilterRegex, string? debugFilterRegex) {
+            FilterMode = filterMode;
+            ChatFilterRegex = chatFilterRegex;
+            DebugFilterRegex = debugFilterRegex;
+        }
+
         protected enum FilterChannel { Debug, Chat }
 
-        protected bool ShouldDisplay(FilterChannel channel, string msg)
-        {
-            Regex regexToUse = null;
+        protected bool ShouldDisplay(FilterChannel channel, string msg) {
+            if (FilterMode == null)
+                return true;
+            
+            Regex? regexToUse = null;
             // Convert to bool for XOR later. Whitelist = 0, Blacklist = 1
-            bool filterMode = Settings.FilterMode == Settings.FilterModeEnum.Blacklist ? true : false;
+            bool filterMode = FilterMode == Settings.FilterModeEnum.Blacklist ? true : false;
             switch (channel)
             {
-                case FilterChannel.Chat: regexToUse = Settings.ChatFilter; break;
-                case FilterChannel.Debug: regexToUse = Settings.DebugFilter; break;
+                case FilterChannel.Chat:
+                    regexToUse = ChatFilterRegex != null ? new Regex(ChatFilterRegex) : null; break;
+                case FilterChannel.Debug: 
+                    regexToUse = DebugFilterRegex != null ? new Regex(DebugFilterRegex) : null; break;
             }
             if (regexToUse != null)
             {
@@ -26,7 +39,8 @@ namespace MinecraftClient.Logger
                 // e.g.  matched(true) ^ blacklist(true) => shouldn't log(false)
                 return regexToUse.IsMatch(msg) ^ filterMode;
             }
-            else return true;
+            
+            return true;
         }
 
         public override void Debug(string msg)

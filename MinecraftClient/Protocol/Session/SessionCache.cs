@@ -12,7 +12,7 @@ namespace MinecraftClient.Protocol.Session
     /// <summary>
     /// Handle sessions caching and storage.
     /// </summary>
-    public static class SessionCache
+    public class SessionCache
     {
         private const string SessionCacheFilePlaintext = "SessionCache.ini";
         private const string SessionCacheFileSerialized = "SessionCache.db";
@@ -24,18 +24,23 @@ namespace MinecraftClient.Protocol.Session
             "launcher_profiles.json"
         );
 
-        private static FileMonitor cachemonitor;
-        private static Dictionary<string, SessionToken> sessions = new Dictionary<string, SessionToken>();
-        private static Timer updatetimer = new Timer(100);
-        private static List<KeyValuePair<string, SessionToken>> pendingadds = new List<KeyValuePair<string, SessionToken>>();
-        private static BinaryFormatter formatter = new BinaryFormatter();
-
+        private FileMonitor cachemonitor;
+        private Dictionary<string, SessionToken> sessions = new Dictionary<string, SessionToken>();
+        private Timer updatetimer = new Timer(100);
+        private List<KeyValuePair<string, SessionToken>> pendingadds = new List<KeyValuePair<string, SessionToken>>();
+        private BinaryFormatter formatter = new BinaryFormatter();
+        private CacheType CachingType;
+        
+        public SessionCache(CacheType cacheType) {
+            CachingType = cacheType;
+        }
+        
         /// <summary>
         /// Retrieve whether SessionCache contains a session for the given login.
         /// </summary>
         /// <param name="login">User login used with Minecraft.net</param>
         /// <returns>TRUE if session is available</returns>
-        public static bool Contains(string login)
+        public bool Contains(string login)
         {
             return sessions.ContainsKey(login);
         }
@@ -45,7 +50,7 @@ namespace MinecraftClient.Protocol.Session
         /// </summary>
         /// <param name="login">User login used with Minecraft.net</param>
         /// <param name="session">User session token used with Minecraft.net</param>
-        public static void Store(string login, SessionToken session)
+        public void Store(string login, SessionToken session)
         {
             if (Contains(login))
             {
@@ -56,11 +61,11 @@ namespace MinecraftClient.Protocol.Session
                 sessions.Add(login, session);
             }
 
-            if (Settings.SessionCaching == CacheType.Disk && updatetimer.Enabled == true)
+            if (CachingType == CacheType.Disk && updatetimer.Enabled == true)
             {
                 pendingadds.Add(new KeyValuePair<string, SessionToken>(login, session));
             }
-            else if (Settings.SessionCaching == CacheType.Disk)
+            else if (CachingType == CacheType.Disk)
             {
                 SaveToDisk();
             }
@@ -71,7 +76,7 @@ namespace MinecraftClient.Protocol.Session
         /// </summary>
         /// <param name="login">User login used with Minecraft.net</param>
         /// <returns>SessionToken for given login</returns>
-        public static SessionToken Get(string login)
+        public SessionToken GetCachedSession(string login)
         {
             return sessions[login];
         }
@@ -80,7 +85,7 @@ namespace MinecraftClient.Protocol.Session
         /// Initialize cache monitoring to keep cache updated with external changes.
         /// </summary>
         /// <returns>TRUE if session tokens are seeded from file</returns>
-        public static bool InitializeDiskCache()
+        public bool InitializeDiskCache()
         {
             cachemonitor = new FileMonitor(AppDomain.CurrentDomain.BaseDirectory, SessionCacheFilePlaintext, new FileSystemEventHandler(OnChanged));
             updatetimer.Elapsed += HandlePending;
@@ -92,7 +97,7 @@ namespace MinecraftClient.Protocol.Session
         /// </summary>
         /// <param name="sender">Sender</param>
         /// <param name="e">Event data</param>
-        private static void OnChanged(object sender, FileSystemEventArgs e)
+        private void OnChanged(object sender, FileSystemEventArgs e)
         {
             updatetimer.Stop();
             updatetimer.Start();
@@ -103,7 +108,7 @@ namespace MinecraftClient.Protocol.Session
         /// </summary>
         /// <param name="sender">Sender</param>
         /// <param name="e">Event data</param>
-        private static void HandlePending(object sender, ElapsedEventArgs e)
+        private void HandlePending(object sender, ElapsedEventArgs e)
         {
             updatetimer.Stop();
             LoadFromDisk();
@@ -119,13 +124,12 @@ namespace MinecraftClient.Protocol.Session
         /// Reads cache file and loads SessionTokens into SessionCache.
         /// </summary>
         /// <returns>True if data is successfully loaded</returns>
-        private static bool LoadFromDisk()
+        private bool LoadFromDisk()
         {
             //Grab sessions in the Minecraft directory
             if (File.Exists(SessionCacheFileMinecraft))
             {
-                if (Settings.DebugMessages)
-                    ConsoleIO.WriteLineFormatted(Translations.Get("cache.loading", Path.GetFileName(SessionCacheFileMinecraft)));
+                Serilog.Log.Debug(Translations.Get("cache.loading", Path.GetFileName(SessionCacheFileMinecraft)));
                 Json.JSONData mcSession = new Json.JSONData(Json.JSONData.DataType.String);
                 try
                 {
@@ -158,8 +162,7 @@ namespace MinecraftClient.Protocol.Session
                                         sessionItem["uuid"].StringValue.Replace("-", ""),
                                         clientID
                                     ));
-                                    if (Settings.DebugMessages)
-                                        ConsoleIO.WriteLineFormatted(Translations.Get("cache.loaded", login, session.ID));
+                                    Serilog.Log.Debug(Translations.Get("cache.loaded", login, session.ID));
                                     sessions[login] = session;
                                 }
                                 catch (InvalidDataException e) { SentrySdk.CaptureException(e); /* Not a valid session */ }
@@ -172,8 +175,7 @@ namespace MinecraftClient.Protocol.Session
             //Serialized session cache file in binary format
             if (File.Exists(SessionCacheFileSerialized))
             {
-                if (Settings.DebugMessages)
-                    ConsoleIO.WriteLineFormatted(Translations.Get("cache.converting", SessionCacheFileSerialized));
+                Serilog.Log.Debug(Translations.Get("cache.converting", SessionCacheFileSerialized));
 
                 try
                 {
@@ -182,8 +184,7 @@ namespace MinecraftClient.Protocol.Session
                         Dictionary<string, SessionToken> sessionsTemp = (Dictionary<string, SessionToken>)formatter.Deserialize(fs);
                         foreach (KeyValuePair<string, SessionToken> item in sessionsTemp)
                         {
-                            if (Settings.DebugMessages)
-                                ConsoleIO.WriteLineFormatted(Translations.Get("cache.loaded", item.Key, item.Value.ID));
+                            Serilog.Log.Debug(Translations.Get("cache.loaded", item.Key, item.Value.ID));
                             sessions[item.Key] = item.Value;
                         }
                     }
@@ -203,8 +204,7 @@ namespace MinecraftClient.Protocol.Session
             //User-editable session cache file in text format
             if (File.Exists(SessionCacheFilePlaintext))
             {
-                if (Settings.DebugMessages)
-                    ConsoleIO.WriteLineFormatted(Translations.Get("cache.loading_session", SessionCacheFilePlaintext));
+                Serilog.Log.Debug(Translations.Get("cache.loading_session", SessionCacheFilePlaintext));
 
                 try
                 {
@@ -219,21 +219,16 @@ namespace MinecraftClient.Protocol.Session
                                 {
                                     string login = keyValue[0].ToLower();
                                     SessionToken session = SessionToken.FromString(keyValue[1]);
-                                    if (Settings.DebugMessages)
-                                        ConsoleIO.WriteLineFormatted(Translations.Get("cache.loaded", login, session.ID));
+                                    Serilog.Log.Debug(Translations.Get("cache.loaded", login, session.ID));
                                     sessions[login] = session;
                                 }
                                 catch (InvalidDataException e)
                                 {
                                     SentrySdk.CaptureException(e);
-                                    if (Settings.DebugMessages)
-                                        ConsoleIO.WriteLineFormatted(Translations.Get("cache.ignore_string", keyValue[1], e.Message));
+                                    Serilog.Log.Debug(Translations.Get("cache.ignore_string", keyValue[1], e.Message));
                                 }
                             }
-                            else if (Settings.DebugMessages)
-                            {
-                                ConsoleIO.WriteLineFormatted(Translations.Get("cache.ignore_line", line));
-                            }
+                            Serilog.Log.Debug(Translations.Get("cache.ignore_line", line));
                         }
                     }
                 }
@@ -250,10 +245,9 @@ namespace MinecraftClient.Protocol.Session
         /// <summary>
         /// Saves SessionToken's from SessionCache into cache file.
         /// </summary>
-        private static void SaveToDisk()
+        private void SaveToDisk()
         {
-            if (Settings.DebugMessages)
-                Translations.WriteLineFormatted("cache.saving");
+            Serilog.Log.Debug(Translations.Get("cache.saving"));
 
             List<string> sessionCacheLines = new List<string>();
             sessionCacheLines.Add("# Generated by MCC v" + Program.Version + " - Edit at own risk!");

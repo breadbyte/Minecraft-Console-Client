@@ -65,7 +65,7 @@ namespace MinecraftClient.ChatBots
                 if(entity.ID == fishingRod.ID)
                 {
                     isFishing = false;
-                    if (Settings.AutoFishing_Antidespawn)
+                    if (Handler.Settings.AutoFishing_Antidespawn)
                     {
                         useItemCounter = 5; // 500ms
                     }

@@ -410,8 +410,7 @@ namespace MinecraftClient.Protocol
 
         private static void WriteDebugLog(string t)
         {
-            if (Settings.DebugMessages && logOutput)
-                WriteLog(t);
+            Serilog.Log.Debug(t);
         }
 
         #endregion

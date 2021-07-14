@@ -87,14 +87,14 @@ namespace MinecraftClient.ChatBots
             /// <param name="msgType">Type of the message public/private message, or other message</param>
             /// <param name="localVars">Dictionary to populate with match variables in case of Regex match</param>
             /// <returns>Internal command to run as a response to this user, or null if no match has been detected</returns>
-            public string Match(string username, string message, MessageType msgType, Dictionary<string, object> localVars)
+            public string Match(string username, string message, MessageType msgType, List<string> botOwners, Dictionary<string, object> localVars)
             {
                 if (DateTime.Now < cooldownExpiration)
                     return null;
 
                 string toSend = null;
 
-                if (ownersOnly && (String.IsNullOrEmpty(username) || !Settings.Bots_Owners.Contains(username.ToLower())))
+                if (ownersOnly && (String.IsNullOrEmpty(username) || !botOwners.Contains(username.ToLower())))
                     return null;
 
                 switch (msgType)
@@ -274,12 +274,12 @@ namespace MinecraftClient.ChatBots
             else message = text;
 
             //Do not process messages sent by the bot itself
-            if (msgType == MessageType.Other || sender != Settings.Username)
+            if (msgType == MessageType.Other || sender != Handler.Settings.Username)
             {
                 foreach (RespondRule rule in respondRules)
                 {
                     Dictionary<string, object> localVars = new Dictionary<string, object>();
-                    string toPerform = rule.Match(sender, message, msgType, localVars);
+                    string toPerform = rule.Match(sender, message, msgType, Handler.Settings.Bots_Owners, localVars);
                     if (!String.IsNullOrEmpty(toPerform))
                     {
                         string response = null;

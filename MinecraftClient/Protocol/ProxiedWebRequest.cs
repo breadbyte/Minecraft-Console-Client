@@ -23,6 +23,7 @@ namespace MinecraftClient.Protocol
         private int port { get { return uri.Port; } }
         private string path { get { return uri.PathAndQuery; } }
         private bool isSecure { get { return uri.Scheme == "https"; } }
+        private ProxyHandler _handler;
 
         public NameValueCollection Headers = new NameValueCollection();
 
@@ -34,7 +35,7 @@ namespace MinecraftClient.Protocol
         /// Create a new http request
         /// </summary>
         /// <param name="url">Target URL</param>
-        public ProxiedWebRequest(string url)
+        public ProxiedWebRequest(ProxyHandler handler, string url)
         {
             uri = new Uri(url);
             SetupBasicHeaders();
@@ -45,8 +46,8 @@ namespace MinecraftClient.Protocol
         /// </summary>
         /// <param name="url">Target URL</param>
         /// <param name="cookies">Cookies to use</param>
-        public ProxiedWebRequest(string url, NameValueCollection cookies)
-        {
+        public ProxiedWebRequest(ProxyHandler handler, string url, NameValueCollection cookies) {
+            _handler = handler;
             uri = new Uri(url);
             Headers.Add("Cookie", GetCookieString(cookies));
             SetupBasicHeaders();
@@ -108,15 +109,14 @@ namespace MinecraftClient.Protocol
             }
             else requestMessage.Add(""); // <CR><LF>
 
-            if (Settings.DebugMessages) {
-                foreach (string l in requestMessage) {
-                    ConsoleIO.WriteLine("< " + l);
-                }
+            foreach (string l in requestMessage) {
+                Serilog.Log.Debug(l);
             }
 
             Response response = Response.Empty();
 
-            var clientResult = ProxyHandler.CreateTcpClient(host, port, true).Result;
+            // todo async
+            var clientResult = _handler.CreateTcpClient(host, port, true).Result;
             if (clientResult.IsFailed)
                 throw new NotImplementedException();
             var client = clientResult.Value;

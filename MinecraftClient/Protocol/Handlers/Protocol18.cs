@@ -73,11 +73,13 @@ namespace MinecraftClient.Protocol.Handlers
         DataTypes dataTypes;
         Tuple<Task, CancellationTokenSource>? netRead = null; // main thread
         ILogger log;
+        private Settings settings;
 
-        public Protocol18Handler(TcpClient Client, int protocolVersion, IMinecraftComHandler handler, ForgeInfo forgeInfo)
+        public Protocol18Handler(Settings settings, TcpClient Client, int protocolVersion, IMinecraftComHandler handler, ForgeInfo forgeInfo)
         {
             ConsoleIO.SetAutoCompleteEngine(this);
             ChatParser.InitTranslations();
+            this.settings = settings;
             this.socketWrapper = new SocketWrapper(Client);
             this.dataTypes = new DataTypes(protocolVersion);
             this.protocolversion = protocolVersion;
@@ -344,8 +346,8 @@ namespace MinecraftClient.Protocol.Handlers
                         {
                             //Hide system messages or xp bar messages?
                             byte messageType = dataTypes.ReadNextByte(packetData);
-                            if ((messageType == 1 && !Settings.DisplaySystemMessages)
-                                || (messageType == 2 && !Settings.DisplayXPBarMessages))
+                            if ((messageType == 1 && !settings.DisplaySystemMessages)
+                                || (messageType == 2 && !settings.DisplayXPBarMessages))
                                 break;
                         }
                         handler.OnTextReceived(message, true);
@@ -1216,7 +1218,7 @@ namespace MinecraftClient.Protocol.Handlers
         /// Do the Minecraft login.
         /// </summary>
         /// <returns>True if login successful</returns>
-        public async Task<bool> Login()
+        public async Task<bool> Login(ProxyHandler proxyHandler)
         {
             byte[] protocol_version = dataTypes.GetVarInt(protocolversion);
             string server_address = pForge.GetServerAddress(handler.GetServerHost());
@@ -1245,7 +1247,7 @@ namespace MinecraftClient.Protocol.Handlers
                     string serverID = dataTypes.ReadNextString(packetData);
                     byte[] Serverkey = dataTypes.ReadNextByteArray(packetData);
                     byte[] token = dataTypes.ReadNextByteArray(packetData);
-                    return await StartEncryption(handler.GetUserUUID(), handler.GetSessionID(), token, serverID, Serverkey);
+                    return await StartEncryption(proxyHandler, handler.GetUserUUID(), handler.GetSessionID(), token, serverID, Serverkey);
                 }
                 else if (packetID == 0x02) //Login successful
                 {
@@ -1269,7 +1271,7 @@ namespace MinecraftClient.Protocol.Handlers
         /// Start network encryption. Automatically called by Login() if the server requests encryption.
         /// </summary>
         /// <returns>True if encryption was successful</returns>
-        private async Task<bool> StartEncryption(string uuid, string sessionID, byte[] token, string serverIDhash, byte[] serverKey)
+        private async Task<bool> StartEncryption(ProxyHandler proxyHandler, string uuid, string sessionID, byte[] token, string serverIDhash, byte[] serverKey)
         {
             System.Security.Cryptography.RSACryptoServiceProvider RSAService = CryptoHandler.DecodeRSAPublicKey(serverKey);
             byte[] secretKey = CryptoHandler.GenerateAESPrivateKey();
@@ -1279,7 +1281,7 @@ namespace MinecraftClient.Protocol.Handlers
             if (serverIDhash != "-")
             {
                 log.Info(Translations.Get("mcc.session"));
-                var checkSession = await ProtocolHandler.SessionCheckAsync(uuid, sessionID, CryptoHandler.getServerHash(serverIDhash, serverKey, secretKey));
+                var checkSession = await ProtocolHandler.SessionCheckAsync(proxyHandler, uuid, sessionID, CryptoHandler.getServerHash(serverIDhash, serverKey, secretKey));
                 if (checkSession.IsFailed)
                 {
                     handler.OnConnectionLost(ChatBot.DisconnectReason.LoginRejected, Translations.Get("mcc.session_fail"));
@@ -1398,11 +1400,12 @@ namespace MinecraftClient.Protocol.Handlers
         /// Ping a Minecraft server to get information about the server
         /// </summary>
         /// <returns>True if ping was successful</returns>
-        public static async Task<Result<ProtocolHandler.ProtocolPingResult>> doPing(string host, int port) {
+        // todo protocol should not be doing the pinging if we're pinging beforehand
+        public static async Task<Result<ProtocolHandler.ProtocolPingResult>> doPing(Settings.ProxySettings settings, ProxyHandler handler, string host, int port) {
             int protocolVersionLocal = 0;
             string version = "";
             
-            var tcpResult = ProxyHandler.CreateTcpClient(host, port).Result;
+            var tcpResult = await handler.CreateTcpClient(host, port);
             if (tcpResult.IsFailed)
                 return Result.Fail("TcpClient failed to connect");
             var tcp = tcpResult.Value;
@@ -1434,13 +1437,7 @@ namespace MinecraftClient.Protocol.Handlers
                 {
                     string result = dataTypes.ReadNextString(packetData); //Get the Json data
 
-                    if (Settings.DebugMessages)
-                    {
-                        // May contain formatting codes, cannot use WriteLineFormatted
-                        Console.ForegroundColor = ConsoleColor.DarkGray;
-                        ConsoleIO.WriteLine(result);
-                        Console.ForegroundColor = ConsoleColor.Gray;
-                    }
+                    Serilog.Log.Debug($"Protocol18 Ping Result: {result}");
 
                     if (!String.IsNullOrEmpty(result) && result.StartsWith("{") && result.EndsWith("}"))
                     {

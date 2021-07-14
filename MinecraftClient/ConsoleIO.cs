@@ -142,9 +142,7 @@ namespace MinecraftClient
                 {
                     if (k.Key == ConsoleKey.V && k.Modifiers == ConsoleModifiers.Control)
                     {
-                        if (Settings.DebugMessages) {
-                            Console.WriteLine("ReadClipboard was attempted");
-                        }
+                        Serilog.Log.Debug("ReadClipboard was attempted");
                         //string clip = ReadClipboard(); -- TODO
                         //foreach (char c in clip)
                         //    AddChar(c);
