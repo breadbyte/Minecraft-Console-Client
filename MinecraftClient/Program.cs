@@ -442,6 +442,10 @@ namespace MinecraftClient
         /// <param name="disconnectReason">If set, the error message will be processed by the AutoRelog bot</param>
         public static void HandleFailure(string errorMessage = null, bool versionError = false, ChatBots.AutoRelog.DisconnectReason? disconnectReason = null)
         {
+            Console.WriteLine("*** Failure! ***");
+            Console.WriteLine(Environment.StackTrace);
+            Console.WriteLine("*** *** *** *** ***");
+
             if (!String.IsNullOrEmpty(errorMessage))
             {
                 ConsoleIO.Reset();

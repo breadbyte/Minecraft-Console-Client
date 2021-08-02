@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Net.Sockets;
 using System.Threading;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using MinecraftClient.ChatBots;
 using MinecraftClient.Protocol;
 using MinecraftClient.Proxy;
@@ -397,9 +399,12 @@ namespace MinecraftClient
                 {
                     if (lastKeepAlive.AddSeconds(30) < DateTime.Now)
                     {
+                        Console.WriteLine($"*** Keepalive Failed: {lastKeepAlive.AddSeconds(30)} < {DateTime.Now} ***");
                         OnConnectionLost(ChatBot.DisconnectReason.ConnectionLost, Translations.Get("error.timeout"));
                         return;
                     }
+                    
+                    Console.WriteLine("*** Keepalive ***");
                 }
             }
             while (! ( (CancellationToken)o! ).IsCancellationRequested);
@@ -527,6 +532,8 @@ namespace MinecraftClient
                     
                     if (((CancellationToken) o!).IsCancellationRequested)
                         return;
+
+                    Console.WriteLine($"*** Read {text} as command ***");
                     
                     InvokeOnMainThread(() => HandleCommandPromptText(text));
                 }
@@ -743,6 +750,10 @@ namespace MinecraftClient
         /// <example>InvokeOnMainThread(() => { yourCode(); });</example>
         public void InvokeOnMainThread(Action task)
         {
+            Console.WriteLine($"*** I am invoking on main thread?: {task.Method.Name} from {task.Method.DeclaringType.Name} ***");
+            Console.WriteLine($"*** Stacktrace ***");
+            var x = new StackTrace();
+            Console.WriteLine(Environment.StackTrace);
             InvokeOnMainThread(() => { task(); return true; });
         }
 
