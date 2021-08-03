@@ -439,12 +439,12 @@ namespace MinecraftClient
 
             if (cmdprompt != null) {
                 cmdprompt.Item2.Cancel();
-                cmdprompt = null;
             }
+            
+            ConsoleIO.WriteLine("*** Press Enter to continue... ***");
 
             if (timeoutdetector != null) {
                 timeoutdetector.Item2.Cancel();
-                timeoutdetector = null;
             }
 
             if (client != null)

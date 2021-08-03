@@ -27,14 +27,18 @@ namespace MinecraftClient
         /// </summary>
         public static void Reset()
         {
+            Console.WriteLine($"*** Entering console lock for resetting, i am {Thread.CurrentThread.ManagedThreadId} ***");
             lock (io_lock)
             {
+                Console.WriteLine($"*** I have the console lock for resetting, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 if (reading)
                 {
                     ClearLineAndBuffer();
                     reading = false;
                     Console.Write("\b \b");
                 }
+                
+                Console.WriteLine($"*** I am releasing the console lock for resetting, i am {Thread.CurrentThread.ManagedThreadId} ***");
             }
         }
 
@@ -77,7 +81,7 @@ namespace MinecraftClient
             StringBuilder password = new StringBuilder();
 
             ConsoleKeyInfo k;
-            while ((k = Console.ReadKey(true)).Key != ConsoleKey.Enter)
+            while ((k = Console.ReadKey(false)).Key != ConsoleKey.Enter)
             {
                 switch (k.Key)
                 {
@@ -126,19 +130,25 @@ namespace MinecraftClient
 
             ConsoleKeyInfo k = new ConsoleKeyInfo();
 
+            Console.WriteLine($"*** Entering console lock for adding >, i am {Thread.CurrentThread.ManagedThreadId} ***");
             lock (io_lock)
             {
+                Console.WriteLine($"*** I hold the console lock for adding >, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 Console.Write('>');
                 reading = true;
                 buffer = "";
                 buffer2 = "";
+                Console.WriteLine($"*** I am releasing the console lock for adding >, i am {Thread.CurrentThread.ManagedThreadId} ***");
             }
 
             while (k.Key != ConsoleKey.Enter)
             {
                 k = Console.ReadKey(true);
+                Console.WriteLine($"  *** ReadKey got {k.Key.ToString()} ***");
+                Console.WriteLine($"*** Entering console lock for keypress, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 lock (io_lock)
                 {
+                    Console.WriteLine($"*** I hold the console lock for keypress, i am {Thread.CurrentThread.ManagedThreadId} ***");
                     if (k.Key == ConsoleKey.V && k.Modifiers == ConsoleModifiers.Control)
                     {
                         string clip = ReadClipboard();
@@ -222,13 +232,19 @@ namespace MinecraftClient
                     }
                     if (k.Key != ConsoleKey.Tab)
                         autocomplete_words.Clear();
+                    
+                    Console.WriteLine($"*** I am releasing the console lock for keypress, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 }
             }
 
+            Console.WriteLine($"*** Entering console lock for readline, i am {Thread.CurrentThread.ManagedThreadId} ***");
             lock (io_lock)
             {
+                Console.WriteLine($"*** I hold the console lock for readline, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 reading = false;
                 previous.AddLast(buffer + buffer2);
+                
+                Console.WriteLine($"*** I am releasing the console lock for readline, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 return buffer + buffer2;
             }
         }
@@ -253,8 +269,10 @@ namespace MinecraftClient
         {
             if (!BasicIO)
             {
+                Console.WriteLine($"*** Entering console lock for writing, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 lock (io_lock)
                 {
+                    Console.WriteLine($"*** I have the console lock for writing, i am {Thread.CurrentThread.ManagedThreadId} ***");
                     if (reading)
                     {
                         try
@@ -289,6 +307,8 @@ namespace MinecraftClient
                         }
                     }
                     else Console.Write(text);
+                    
+                    Console.WriteLine($"*** I am releasing the console lock for resetting, i am {Thread.CurrentThread.ManagedThreadId} ***");
                 }
             }
             else Console.Write(text);
