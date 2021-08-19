@@ -6,7 +6,9 @@ using System.Net.Sockets;
 using System.Threading;
 using System.IO;
 using System.Net;
+using System.Threading.Tasks;
 using MinecraftClient.ChatBots;
+using MinecraftClient.ConsoleGui;
 using MinecraftClient.Protocol;
 using MinecraftClient.Proxy;
 using MinecraftClient.Protocol.Handlers.Forge;
@@ -521,9 +523,13 @@ namespace MinecraftClient
             try
             {
                 Thread.Sleep(500);
-                while (client.Client.Connected && !((CancellationToken)o!).IsCancellationRequested)
-                {
-                    string text = ConsoleIO.ReadLine();
+                while (client.Client.Connected && !((CancellationToken)o!).IsCancellationRequested) {
+                    string text;
+                    
+                    if (ConsoleIO.BasicIO)
+                        text = ConsoleIO.ReadLine();
+                    else
+                        text = ConsoleHandler.WaitForInputAsync().Result;
                     
                     if (((CancellationToken) o!).IsCancellationRequested)
                         return;

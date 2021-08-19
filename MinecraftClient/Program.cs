@@ -6,9 +6,12 @@ using MinecraftClient.Protocol;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
+using MinecraftClient.ConsoleGui;
 using MinecraftClient.Protocol.Handlers.Forge;
 using MinecraftClient.Protocol.Session;
 using MinecraftClient.WinAPI;
+using Terminal.Gui;
 
 namespace MinecraftClient
 {
@@ -42,71 +45,9 @@ namespace MinecraftClient
         /// <summary>
         /// The main entry point of Minecraft Console Client
         /// </summary>
-        static void Main(string[] args)
-        {
-            Console.WriteLine("Console Client for MC {0} to {1} - v{2} - By ORelio & Contributors", MCLowestVersion, MCHighestVersion, Version);
-
-            //Build information to facilitate processing of bug reports
-            if (BuildInfo != null)
-            {
-                ConsoleIO.WriteLineFormatted("§8" + BuildInfo);
-            }
-
-            //Debug input ?
-            if (args.Length == 1 && args[0] == "--keyboard-debug")
-            {
-                ConsoleIO.WriteLine("Keyboard debug mode: Press any key to display info");
-                ConsoleIO.DebugReadInput();
-            }
-
-            //Setup ConsoleIO
-            ConsoleIO.LogPrefix = "§8[MCC] ";
-            if (args.Length >= 1 && args[args.Length - 1] == "BasicIO" || args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor")
-            {
-                if (args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor")
-                {
-                    ConsoleIO.BasicIO_NoColor = true;
-                }
-                ConsoleIO.BasicIO = true;
-                args = args.Where(o => !Object.ReferenceEquals(o, args[args.Length - 1])).ToArray();
-            }
-
-            //Take advantage of Windows 10 / Mac / Linux UTF-8 console
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                // If we're on windows, check if our version is Win10 or greater.
-                if (WindowsVersion.WinMajorVersion >= 10)
-                    Console.OutputEncoding = Console.InputEncoding = Encoding.UTF8;
-            }
-            else {
-                // Apply to all other operating systems.
-                Console.OutputEncoding = Console.InputEncoding = Encoding.UTF8;
-            }
-
-            //Process ini configuration file
-            if (args.Length >= 1 && System.IO.File.Exists(args[0]) && System.IO.Path.GetExtension(args[0]).ToLower() == ".ini")
-            {
-                Settings.LoadFile(args[0]);
-
-                //remove ini configuration file from arguments array
-                List<string> args_tmp = args.ToList<string>();
-                args_tmp.RemoveAt(0);
-                args = args_tmp.ToArray();
-            }
-            else if (System.IO.File.Exists("MinecraftClient.ini"))
-            {
-                Settings.LoadFile("MinecraftClient.ini");
-            }
-            else Settings.WriteDefaultSettings("MinecraftClient.ini");
-
-            //Load external translation file. Should be called AFTER settings loaded
-            Translations.LoadExternalTranslationFile(Settings.Language);
-
-            //Other command-line arguments
-            if (args.Length >= 1)
-            {
-                if (args.Contains("--help"))
-                {
+        static void Main(string[] args) {
+            if (args.Length > 0) {
+                if (args.Contains("--help")) {
                     Console.WriteLine("Command-Line Help:");
                     Console.WriteLine("MinecraftClient.exe <username> <password> <server>");
                     Console.WriteLine("MinecraftClient.exe <username> <password> <server> \"/mycommand\"");
@@ -115,92 +56,157 @@ namespace MinecraftClient
                     Console.WriteLine("MinecraftClient.exe <settings-file.ini> [--other settings]");
                     return;
                 }
+            }
 
-                try
-                {
-                    Settings.LoadArguments(args);
+            //Setup ConsoleIO
+            ConsoleIO.LogPrefix = "§8[MCC] ";
+            if (args.Length >= 1 && args[args.Length - 1] == "BasicIO" ||
+                args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor") {
+                if (args.Length >= 1 && args[args.Length - 1] == "BasicIO-NoColor") {
+                    ConsoleIO.BasicIO_NoColor = true;
                 }
-                catch (ArgumentException e)
-                {
+
+                ConsoleIO.BasicIO = true;
+                args = args.Where(o => !Object.ReferenceEquals(o, args[args.Length - 1])).ToArray();
+            }
+
+            if (ConsoleIO.BasicIO) {
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+                    Console.WriteLine("BasicIO is not supported on non-Windows systems.");
+                    Console.WriteLine("Press any key to continue...");
+                    Console.ReadKey();
+                    Environment.Exit(1);
+                }
+
+                if (WindowsVersion.WinMajorVersion >= 10)
+                    Console.OutputEncoding = Console.InputEncoding = Encoding.UTF8;
+            }
+
+            startupargs = args;
+            
+            if (!ConsoleIO.BasicIO) {
+                Application.Init();
+                ConsoleHandler cHandler = new ConsoleHandler();
+                Application.Top.Initialized += StartMCC;
+                Application.Run();
+            }
+        }
+
+        public static void StartMCC(object? sender, EventArgs eventArgs) {
+            //Process ini configuration file
+            if (startupargs.Length >= 1 && System.IO.File.Exists(startupargs[0]) &&
+                System.IO.Path.GetExtension(startupargs[0]).ToLower() == ".ini") {
+                Settings.LoadFile(startupargs[0]);
+
+                //remove ini configuration file from arguments array
+                List<string> args_tmp = startupargs.ToList<string>();
+                args_tmp.RemoveAt(0);
+                startupargs = args_tmp.ToArray();
+            }
+            else if (System.IO.File.Exists("MinecraftClient.ini")) {
+                Settings.LoadFile("MinecraftClient.ini");
+            }
+            else Settings.WriteDefaultSettings("MinecraftClient.ini");
+
+            //Load external translation file. Should be called AFTER settings loaded
+            Translations.LoadExternalTranslationFile(Settings.Language);
+
+            //Other command-line arguments
+            if (startupargs.Length >= 1) {
+                try {
+                    Settings.LoadArguments(startupargs);
+                }
+                catch (ArgumentException e) {
                     Settings.interactiveMode = false;
                     HandleFailure(e.Message);
                     return;
                 }
             }
+            
+            ConsoleHandler.Instance!.WriteLine($"Console Client for MC \n {MCLowestVersion} to {MCHighestVersion} - v{Version} - By ORelio & Contributors");
 
-            if (Settings.ConsoleTitle != "")
-            {
+            //Build information to facilitate processing of bug reports
+            if (BuildInfo != null) {
+                ConsoleIO.WriteLineFormatted("§8" + BuildInfo);
+            }
+
+            if (Settings.ConsoleTitle != "") {
                 Settings.Username = "New Window";
-                Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
+                ConsoleHandler.Instance!.SetTitle(Settings.ExpandVars(Settings.ConsoleTitle));
             }
 
             //Test line to troubleshoot invisible colors
-            if (Settings.DebugMessages)
-            {
+            if (Settings.DebugMessages) {
                 ConsoleIO.WriteLineFormatted(Translations.Get("debug.color_test", "[0123456789ABCDEF]: [§00§11§22§33§44§55§66§77§88§99§aA§bB§cC§dD§eE§fF§r]"));
             }
 
             //Load cached sessions from disk if necessary
-            if (Settings.SessionCaching == CacheType.Disk)
-            {
+            if (Settings.SessionCaching == CacheType.Disk) {
                 bool cacheLoaded = SessionCache.InitializeDiskCache();
                 if (Settings.DebugMessages)
                     Translations.WriteLineFormatted(cacheLoaded ? "debug.session_cache_ok" : "debug.session_cache_fail");
             }
 
-            //Asking the user to type in missing data such as Username and Password
-            bool useBrowser = Settings.AccountType == ProtocolHandler.AccountType.Microsoft && Settings.LoginMethod == "browser";
-            if (Settings.Login == "")
-            {
-                if (useBrowser)
-                    ConsoleIO.WriteLine("Press Enter to skip session cache checking and continue sign-in with browser");
-                Console.Write(ConsoleIO.BasicIO ? Translations.Get("mcc.login_basic_io") + "\n" : Translations.Get("mcc.login"));
-                Settings.Login = Console.ReadLine();
-            }
-            if (Settings.Password == "" 
-                && (Settings.SessionCaching == CacheType.None || !SessionCache.Contains(Settings.Login.ToLower()))
-                && !useBrowser)
-            {
-                RequestPassword();
-            }
-
-            // Setup exit cleaning code
-            ExitCleanUp.Add(delegate () 
-            {
-                // Do NOT use Program.Exit() as creating new Thread cause program to freeze
-                if (client != null) { client.Disconnect(); ConsoleIO.Reset(); }
-                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt = null; ConsoleIO.Reset(); }
-                if (Settings.playerHeadAsIcon) { ConsoleIcon.revertToMCCIcon(); }
-            });
-            
-
-            startupargs = args;
-            InitializeClient();
+            new Thread(async () => {
+                await InitializeClient();
+            }).Start();
         }
 
         /// <summary>
         /// Reduest user to submit password.
         /// </summary>
-        private static void RequestPassword()
+        private static async Task RequestPassword()
         {
-            Console.Write(ConsoleIO.BasicIO ? Translations.Get("mcc.password_basic_io", Settings.Login) + "\n" : Translations.Get("mcc.password"));
-            Settings.Password = ConsoleIO.BasicIO ? Console.ReadLine() : ConsoleIO.ReadPassword();
-            if (Settings.Password == "") { Settings.Password = "-"; }
-            if (!ConsoleIO.BasicIO)
-            {
-                //Hide password length
-                Console.CursorTop--; Console.Write(Translations.Get("mcc.password_hidden", "<******>"));
-                for (int i = 19; i < Console.BufferWidth; i++) { Console.Write(' '); }
+            if (ConsoleIO.BasicIO) {
+                Console.Write(Translations.Get("mcc.password_basic_io", Settings.Login) + "\n");
+                Settings.Password = Console.ReadLine();
+                if (Settings.Password == "") {
+                    Settings.Password = "-";
+                }
+            }
+            else {
+                ConsoleIO.WriteLine(Translations.Get("mcc.password"));
+                Settings.Password = await ConsoleHandler.WaitForInputAsync(true);
+                if (Settings.Password == "") {
+                    Settings.Password = "-";
+                }
             }
         }
 
         /// <summary>
         /// Start a new Client
         /// </summary>
-        private static void InitializeClient()
+        private static async Task InitializeClient()
         {
-            SessionToken session = new SessionToken();
+            //Asking the user to type in missing data such as Username and Password
+            bool useBrowser = Settings.AccountType == ProtocolHandler.AccountType.Microsoft && Settings.LoginMethod == "browser";
+            if (Settings.Login == "") {
+                if (useBrowser)
+                    ConsoleIO.WriteLine("Press Enter to skip session cache checking and continue sign-in with browser");
+                if (ConsoleIO.BasicIO) {
+                    Console.WriteLine(Translations.Get("mcc.login_basic_io") + "\n");
+                    Settings.Login = Console.ReadLine();
+                }
 
+                ConsoleIO.WriteLine(Translations.Get("mcc.login"));
+                Settings.Login = await ConsoleHandler.WaitForInputAsync();
+            }
+            if (Settings.Password == "" 
+                && (Settings.SessionCaching == CacheType.None || !SessionCache.Contains(Settings.Login.ToLower()))
+                && !useBrowser) {
+                await RequestPassword();
+            }
+
+            // Setup exit cleaning code
+            ExitCleanUp.Add(delegate () 
+            {
+                // Do NOT use Program.Exit() as creating new Thread cause program to freeze
+                if (client != null) { client.Disconnect(); }
+                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt = null; }
+                if (Settings.playerHeadAsIcon) { ConsoleIcon.revertToMCCIcon(); }
+            });
+            
+            SessionToken session = new SessionToken();
             ProtocolHandler.LoginResult result = ProtocolHandler.LoginResult.LoginRequired;
 
             if (Settings.Password == "-")
@@ -259,7 +265,13 @@ namespace MinecraftClient
                 if (Settings.ServerIP == "")
                 {
                     Translations.Write("mcc.ip");
-                    string addressInput = Console.ReadLine();
+                    string addressInput;
+                    
+                    if (ConsoleIO.BasicIO)
+                        addressInput = Console.ReadLine();
+                    else
+                        addressInput = await ConsoleHandler.WaitForInputAsync();
+                    
                     if (addressInput.StartsWith("realms:"))
                     {
                         if (Settings.MinecraftRealmsEnabled)
@@ -366,7 +378,10 @@ namespace MinecraftClient
 
                         //Update console title
                         if (Settings.ConsoleTitle != "")
-                            Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
+                            if (ConsoleIO.BasicIO)
+                                Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
+                            else 
+                                ConsoleHandler.Instance!.SetTitle(Settings.ExpandVars(Settings.ConsoleTitle));
                     }
                     catch (NotSupportedException) { HandleFailure(Translations.Get("error.unsupported"), true); }
                 }
@@ -407,8 +422,10 @@ namespace MinecraftClient
         {
             new Thread(new ThreadStart(delegate
             {
-                if (client != null) { client.Disconnect(); ConsoleIO.Reset(); }
-                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt.Item1.Join(); offlinePrompt = null; ConsoleIO.Reset(); }
+                if (client != null) { client.Disconnect();
+                }
+                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt.Item1.Join(); offlinePrompt = null;
+                }
                 if (delaySeconds > 0)
                 {
                     Translations.WriteLine("mcc.restart_delay", delaySeconds);
@@ -426,8 +443,10 @@ namespace MinecraftClient
         {
             new Thread(new ThreadStart(delegate
             {
-                if (client != null) { client.Disconnect(); ConsoleIO.Reset(); }
-                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt.Item1.Join(); offlinePrompt = null; ConsoleIO.Reset(); }
+                if (client != null) { client.Disconnect();
+                }
+                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt.Item1.Join(); offlinePrompt = null;
+                }
                 if (Settings.playerHeadAsIcon) { ConsoleIcon.revertToMCCIcon(); }
                 Environment.Exit(exitcode);
             })).Start();
@@ -440,11 +459,9 @@ namespace MinecraftClient
         /// <param name="errorMessage">Error message to display and optionally pass to AutoRelog bot</param>
         /// <param name="versionError">Specify if the error is related to an incompatible or unkown server version</param>
         /// <param name="disconnectReason">If set, the error message will be processed by the AutoRelog bot</param>
-        public static void HandleFailure(string errorMessage = null, bool versionError = false, ChatBots.AutoRelog.DisconnectReason? disconnectReason = null)
-        {
+        public static void HandleFailure(string errorMessage = null, bool versionError = false, ChatBots.AutoRelog.DisconnectReason? disconnectReason = null) {
             if (!String.IsNullOrEmpty(errorMessage))
             {
-                ConsoleIO.Reset();
                 while (Console.KeyAvailable)
                     Console.ReadKey(true);
                 Console.WriteLine(errorMessage);

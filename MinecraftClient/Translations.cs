@@ -208,7 +208,7 @@ namespace MinecraftClient
         /// If true, "hh-mm-ss" timestamp will be prepended.
         /// If unspecified, value is retrieved from EnableTimestamps.
         /// </param>
-        public static void WriteLineFormatted(string key, bool acceptnewlines = true, bool? displayTimestamp = null)
+        public static void WriteLineFormatted(string key, bool acceptnewlines = true, bool displayTimestamp = false)
         {
             ConsoleIO.WriteLineFormatted(Get(key), acceptnewlines, displayTimestamp);
         }

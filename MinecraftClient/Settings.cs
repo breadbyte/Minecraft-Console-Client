@@ -115,6 +115,7 @@ namespace MinecraftClient
         public static bool LogToFile = false;
         public static string LogFile = "console-log.txt";
         public static bool PrependTimestamp = false;
+        public static bool AutoScroll = true;
 
         //AntiAFK Settings
         public static bool AntiAFK_Enabled = false;
