@@ -42,8 +42,8 @@ namespace MinecraftClient.ConsoleGui {
         public static List<Rune> TrimFormatting(this List<Rune> runes) {
             if (runes.Count == 0)
                 return runes;
-
-            List<Rune> backingStore = new(runes);
+            
+            List<Rune> backingStore = new(runes); //fixme alloc issue
             for (int i = 0; i < backingStore.Count; i++) {
                 switch (backingStore[i]) {
                     case '§':

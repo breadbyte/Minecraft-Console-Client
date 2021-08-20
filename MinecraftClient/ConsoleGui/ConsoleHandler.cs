@@ -13,6 +13,8 @@ namespace MinecraftClient.ConsoleGui {
         private static bool inputReady = false;
         private static string userInput = "";
 
+        private static AutoResetEvent InputTextAvailable = new(false);
+        
         static FormattedView consoleOutput = new FormattedView() {
             X = 0,
             Y = 0,
@@ -56,11 +58,10 @@ namespace MinecraftClient.ConsoleGui {
             textBox.KeyDown += (x => {
                 switch (x.KeyEvent.Key) {
                     case Key.Enter:
-                        lock (inputLock) {
-                            userInput = textBox.Text.ToString() ?? "";
-                            inputReady = true;
-                        }
-                        textBox.Text = "";
+                        userInput = textBox.Text.ToString() ?? "";
+                        InputTextAvailable.Set();
+                        lock (inputLock)
+                            textBox.Text = "";
                         break;
                     case Key.Tab:
                         // todo tab handler
@@ -93,20 +94,17 @@ namespace MinecraftClient.ConsoleGui {
             Instance = this;
         }
 
-        public static async Task<string> WaitForInputAsync(bool passwordInput = false) {
-            return await Task.Run(() => {
-                if (passwordInput)
-                    textBox.Secret = true;
-
-                while (!inputReady) { }
-
-                lock (inputLock) {
-                    inputReady = false;
-                    textBox.Secret = false;
-                }
-
+        public static string WaitForInput(bool passwordInput = false) {
+            if (passwordInput)
+                textBox.Secret = true;
+            
+            InputTextAvailable.WaitOne();
+            
+            if (passwordInput)
+                textBox.Secret = false;
+            
+            lock (inputLock)
                 return userInput;
-            });
         }
 
         public void WriteLine(string strToWrite) {

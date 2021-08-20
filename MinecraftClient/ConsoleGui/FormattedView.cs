@@ -38,7 +38,7 @@ namespace MinecraftClient.ConsoleGui {
             lock (lineLock) {
                 var currentFormattedLine = formattedLines.FirstOrDefault(x => {
                     var v = x.TrimFormatting();
-                    return v.SequenceEqual(line.ToArray());
+                    return v.SequenceEqual(line.ToArray()); //fixme alloc issue (sequenceEqual & toArray)
 
                     // Throws InvalidOperation when formattedLines has desynced with the current lines shown.
                     // Should never happen theoretically but the exception is here just in case so we fail fast.

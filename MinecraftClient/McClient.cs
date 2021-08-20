@@ -529,7 +529,7 @@ namespace MinecraftClient
                     if (ConsoleIO.BasicIO)
                         text = ConsoleIO.ReadLine();
                     else
-                        text = ConsoleHandler.WaitForInputAsync().Result;
+                        text = ConsoleHandler.WaitForInput();
                     
                     if (((CancellationToken) o!).IsCancellationRequested)
                         return;

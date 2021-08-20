@@ -166,7 +166,7 @@ namespace MinecraftClient
             }
             else {
                 ConsoleIO.WriteLine(Translations.Get("mcc.password"));
-                Settings.Password = await ConsoleHandler.WaitForInputAsync(true);
+                Settings.Password = ConsoleHandler.WaitForInput(true);
                 if (Settings.Password == "") {
                     Settings.Password = "-";
                 }
@@ -184,12 +184,12 @@ namespace MinecraftClient
                 if (useBrowser)
                     ConsoleIO.WriteLine("Press Enter to skip session cache checking and continue sign-in with browser");
                 if (ConsoleIO.BasicIO) {
-                    Console.WriteLine(Translations.Get("mcc.login_basic_io") + "\n");
+                    Console.WriteLine(Translations.Get("mcc.login_basic_io") + '\n');
                     Settings.Login = Console.ReadLine();
                 }
 
                 ConsoleIO.WriteLine(Translations.Get("mcc.login"));
-                Settings.Login = await ConsoleHandler.WaitForInputAsync();
+                Settings.Login = ConsoleHandler.WaitForInput();
             }
             if (Settings.Password == "" 
                 && (Settings.SessionCaching == CacheType.None || !SessionCache.Contains(Settings.Login.ToLower()))
@@ -270,7 +270,7 @@ namespace MinecraftClient
                     if (ConsoleIO.BasicIO)
                         addressInput = Console.ReadLine();
                     else
-                        addressInput = await ConsoleHandler.WaitForInputAsync();
+                        addressInput = ConsoleHandler.WaitForInput();
                     
                     if (addressInput.StartsWith("realms:"))
                     {
