@@ -123,7 +123,7 @@ namespace MinecraftClient
                 }
             }
             
-            ConsoleHandler.Instance!.WriteLine($"Console Client for MC \n {MCLowestVersion} to {MCHighestVersion} - v{Version} - By ORelio & Contributors");
+            ConsoleHandler.Instance!.WriteLine($"Console Client for MC {MCLowestVersion} to {MCHighestVersion} - v{Version} - By ORelio & Contributors");
 
             //Build information to facilitate processing of bug reports
             if (BuildInfo != null) {
