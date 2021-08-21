@@ -187,16 +187,7 @@ namespace MinecraftClient
         }
 
         #region Console writing method wrapper
-
-        /// <summary>
-        /// Translate the key and write the result to the standard output, without newline character
-        /// </summary>
-        /// <param name="key">Translation key</param>
-        public static void Write(string key)
-        {
-            ConsoleIO.Write(Get(key));
-        }
-
+        
         /// <summary>
         /// Translate the key and write a Minecraft-Like formatted string to the standard output, using §c color codes
         /// See minecraft.gamepedia.com/Classic_server_protocol#Color_Codes for more info

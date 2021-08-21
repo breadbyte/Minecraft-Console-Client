@@ -264,7 +264,7 @@ namespace MinecraftClient
 
                 if (Settings.ServerIP == "")
                 {
-                    Translations.Write("mcc.ip");
+                    Translations.WriteLine("mcc.ip");
                     string addressInput;
                     
                     if (ConsoleIO.BasicIO)
@@ -477,7 +477,7 @@ namespace MinecraftClient
             {
                 if (versionError)
                 {
-                    Translations.Write("mcc.server_version");
+                    Translations.WriteLine("mcc.server_version");
                     Settings.ServerVersion = ConsoleIO.ReadLine();
                     if (Settings.ServerVersion != "")
                     {

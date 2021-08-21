@@ -110,21 +110,6 @@ namespace MinecraftClient
         }
 
         /// <summary>
-        /// Write a string to the standard output, without newline character
-        /// </summary>
-        public static void Write(string text)
-        {
-            // TODO FIXME: Write only! no newline! 
-            if (BasicIO)
-            {
-                Console.Write(text);
-            }
-            else {
-                ConsoleHandler.Instance.WriteLine(text);
-            }
-        }
-
-        /// <summary>
         /// Write a string to the standard output with a trailing newline
         /// </summary>
         public static void WriteLine(string line)
@@ -134,18 +119,6 @@ namespace MinecraftClient
             }
             else {
                 ConsoleHandler.Instance.WriteLine(line);
-            }
-        }
-
-        /// <summary>
-        /// Write a single character to the standard output
-        /// </summary>
-        public static void Write(char c) {
-            if (BasicIO) {
-                Write("" + c);
-            }
-            else {
-                throw new NotImplementedException();
             }
         }
 
@@ -167,7 +140,7 @@ namespace MinecraftClient
 
             if (BasicIO) {
                 if (displayTimestamp) {
-                    ConsoleIO.Write($"{DateTime.Now.Hour:00}:{DateTime.Now.Minute:00}:{DateTime.Now.Second:00}");
+                    Console.Write($"{DateTime.Now.Hour:00}:{DateTime.Now.Minute:00}:{DateTime.Now.Second:00}");
                 }
 
                 if (BasicIO_NoColor) {
