@@ -39,7 +39,6 @@ namespace MinecraftClient
         public const string MCHighestVersion = "1.17";
         public static readonly string BuildInfo = null;
 
-        private static Tuple<Thread, CancellationTokenSource>? offlinePrompt = null;
         private static bool useMcVersionOnce = false;
 
         /// <summary>
@@ -202,7 +201,6 @@ namespace MinecraftClient
             {
                 // Do NOT use Program.Exit() as creating new Thread cause program to freeze
                 if (client != null) { client.Disconnect(); }
-                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt = null; }
                 if (Settings.playerHeadAsIcon) { ConsoleIcon.revertToMCCIcon(); }
             });
             
@@ -422,12 +420,8 @@ namespace MinecraftClient
         {
             new Thread(new ThreadStart(delegate
             {
-                if (client != null) { client.Disconnect();
-                }
-                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt.Item1.Join(); offlinePrompt = null;
-                }
-                if (delaySeconds > 0)
-                {
+                if (client != null) { client.Disconnect(); }
+                if (delaySeconds > 0) {
                     Translations.WriteLine("mcc.restart_delay", delaySeconds);
                     System.Threading.Thread.Sleep(delaySeconds * 1000);
                 }
@@ -443,10 +437,7 @@ namespace MinecraftClient
         {
             new Thread(new ThreadStart(delegate
             {
-                if (client != null) { client.Disconnect();
-                }
-                if (offlinePrompt != null) { offlinePrompt.Item2.Cancel(); offlinePrompt.Item1.Join(); offlinePrompt = null;
-                }
+                if (client != null) { client.Disconnect(); }
                 if (Settings.playerHeadAsIcon) { ConsoleIcon.revertToMCCIcon(); }
                 Environment.Exit(exitcode);
             })).Start();
@@ -489,16 +480,19 @@ namespace MinecraftClient
 
                 bool offlineMode = true;
                 bool exitThread = false;
+                client.Disconnect();
+                
+                ConsoleIO.WriteLineFormatted(Translations.Get("mcc.disconnected", (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
+                ConsoleIO.WriteLine("Press Enter to continue...");
                 while (offlineMode) {
                     string command = " ";
-                    ConsoleIO.WriteLineFormatted(Translations.Get("mcc.disconnected", (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
-                    Translations.WriteLineFormatted("mcc.press_exit");
 
                     if (exitThread)
                         return;
 
                     while (command.Length > 0) {
                         command = ConsoleIO.ReadLine().Trim();
+
                         if (command.Length > 0) {
                             string message = "";
 
@@ -542,6 +536,7 @@ namespace MinecraftClient
                             if (message != "")
                                 ConsoleIO.WriteLineFormatted("§8MCC: " + message);
                         }
+                        else { ConsoleIO.WriteLine("Type /help for help"); }
                     }
                     if (exitThread)
                         return;

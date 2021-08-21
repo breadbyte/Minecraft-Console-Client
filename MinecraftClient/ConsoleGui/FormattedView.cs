@@ -16,7 +16,6 @@ namespace MinecraftClient.ConsoleGui {
         private static List<char[]> formattingCache = new();
         private object lineLock = new();
         private static Regex FormatRegex = new Regex("(§[0-9a-fk-or])((?:[^§]|§[^0-9a-fk-or])*)", RegexOptions.Compiled);
-        private static ArrayPool<char> ArrayPool = ArrayPool<char>.Create();
         FastRuneCompare _fastRuneCompare = new FastRuneCompare();
 
         private Attribute black = Driver.MakeAttribute(Color.Gray, Color.Black);
