@@ -16,12 +16,6 @@ namespace MinecraftClient
     public static class ConsoleIO
     {
         private static IAutoComplete autocomplete_engine;
-        private static LinkedList<string> autocomplete_words = new LinkedList<string>();
-        private static LinkedList<string> previous = new LinkedList<string>();
-        private static string buffer = "";
-        private static string buffer2 = "";
-        private static StringBuilder autocompleteBuilder = new StringBuilder();
-
 
         /// <summary>
         /// Set an auto-completion engine for TAB autocompletion.
@@ -34,11 +28,8 @@ namespace MinecraftClient
         internal static void DoAutoComplete(string buffer) {
             if (autocomplete_engine == null)
                 return;
-
-            foreach (var result in autocomplete_engine.AutoComplete(buffer)) {
-                autocompleteBuilder.Append(result + " ");
-            }
-            autocompleteBuilder.Clear();
+            
+            autocomplete_engine.AutoComplete(buffer);
         }
 
         /// <summary>
@@ -62,51 +53,7 @@ namespace MinecraftClient
         /// Specify a generic log line prefix for WriteLogLine()
         /// </summary>
         public static string LogPrefix = "§8[Log] ";
-
-        /// <summary>
-        /// Read a password from the standard input
-        /// </summary>
-        public static string ReadPassword() {
-            StringBuilder password = new StringBuilder();
-
-            ConsoleKeyInfo k;
-            while ((k = Console.ReadKey(true)).Key != ConsoleKey.Enter)
-            {
-                switch (k.Key)
-                {
-                    case ConsoleKey.Backspace:
-                        if (password.Length > 0)
-                        {
-                            Console.Write("\b \b");
-                            password.Remove(password.Length - 1, 1);
-                        }
-                        break;
-
-                    case ConsoleKey.Escape:
-                    case ConsoleKey.LeftArrow:
-                    case ConsoleKey.RightArrow:
-                    case ConsoleKey.Home:
-                    case ConsoleKey.End:
-                    case ConsoleKey.Delete:
-                    case ConsoleKey.DownArrow:
-                    case ConsoleKey.UpArrow:
-                    case ConsoleKey.Tab:
-                        break;
-
-                    default:
-                        if (k.KeyChar != 0)
-                        {
-                            Console.Write('*');
-                            password.Append(k.KeyChar);
-                        }
-                        break;
-                }
-            }
-
-            Console.WriteLine();
-            return password.ToString();
-        }
-
+        
         /// <summary>
         /// Read a line from the standard input
         /// </summary>
@@ -177,128 +124,6 @@ namespace MinecraftClient
                 text = text.Replace('\n', ' ');
             WriteLineFormatted(LogPrefix + text);
         }
-
-        #region Subfunctions
-
-        /// <summary>
-        /// Clear all text inside the input prompt
-        /// </summary>
-        private static void ClearLineAndBuffer()
-        {
-            while (buffer2.Length > 0)
-            {
-                GoRight();
-            }
-            while (buffer.Length > 0)
-            {
-                RemoveOneChar();
-            }
-        }
-
-        /// <summary>
-        /// Remove one character on the left of the cursor in input prompt
-        /// </summary>
-        private static void RemoveOneChar()
-        {
-            if (buffer.Length > 0)
-            {
-                try
-                {
-                    GoBack();
-                    Console.Write(' ');
-                    GoBack();
-                }
-                catch (ArgumentOutOfRangeException) { /* Console was resized!? */ }
-                buffer = buffer.Substring(0, buffer.Length - 1);
-
-                if (buffer2.Length > 0)
-                {
-                    Console.Write(buffer2);
-                    Console.Write(' ');
-                    GoBack();
-                    for (int i = 0; i < buffer2.Length; i++)
-                    {
-                        GoBack();
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Move the cursor one character to the left inside the console, regardless of input prompt state
-        /// </summary>
-        private static void GoBack()
-        {
-            try
-            {
-                if (Console.CursorLeft == 0)
-                {
-                    Console.CursorLeft = Console.BufferWidth - 1;
-                    if (Console.CursorTop > 0)
-                        Console.CursorTop--;
-                }
-                else
-                {
-                    Console.CursorLeft = Console.CursorLeft - 1;
-                }
-            }
-            catch (ArgumentOutOfRangeException) { /* Console was resized!? */ }
-        }
-
-        /// <summary>
-        /// Move the cursor one character to the left in input prompt, adjusting buffers accordingly
-        /// </summary>
-        private static void GoLeft()
-        {
-            if (buffer.Length > 0)
-            {
-                buffer2 = "" + buffer[buffer.Length - 1] + buffer2;
-                buffer = buffer.Substring(0, buffer.Length - 1);
-                GoBack();
-            }
-        }
-
-        /// <summary>
-        /// Move the cursor one character to the right in input prompt, adjusting buffers accordingly
-        /// </summary>
-        private static void GoRight()
-        {
-            if (buffer2.Length > 0)
-            {
-                buffer = buffer + buffer2[0];
-                Console.Write(buffer2[0]);
-                buffer2 = buffer2.Substring(1);
-            }
-        }
-
-        /// <summary>
-        /// Insert a new character in the input prompt
-        /// </summary>
-        /// <param name="c">New character</param>
-        private static void AddChar(char c)
-        {
-            Console.Write(c);
-            buffer += c;
-            Console.Write(buffer2);
-            for (int i = 0; i < buffer2.Length; i++)
-            {
-                GoBack();
-            }
-        }
-
-        #endregion
-
-        #region Clipboard management
-
-        /// <summary>
-        /// Read a string from the system clipboard
-        /// </summary>
-        /// <returns>String from the system clipboard</returns>
-        private static string ReadClipboard() {
-            return TextCopy.ClipboardService.GetText() ?? "";
-        }
-
-        #endregion
     }
 
     /// <summary>

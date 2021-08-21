@@ -38,13 +38,6 @@ namespace MinecraftClient.ConsoleGui {
             textBox.ColorScheme = Colors.ColorSchemes["TopLevel"];
             rootWindow.ColorScheme = Colors.ColorSchemes["Menu"];
 
-            var status = new StatusBar(new StatusItem[] {
-                    new StatusItem(Key.F1, "~F1~ Help", null),
-                    new StatusItem(Key.F2, "~F2~ Load", null),
-                    new StatusItem(Key.F3, "~F3~ Save", null),
-                    new StatusItem(Key.CtrlMask | Key.Q, "~^Q~ Quit", null)
-                });
-            
             textBox.KeyPress += (x => {
                 // Prevent the Tab Handler from switching us to a different view.
                 if (x.KeyEvent.Key == Key.Tab) {
@@ -89,7 +82,7 @@ namespace MinecraftClient.ConsoleGui {
             });
             
             rootWindow.Add(consoleOutput, textBox);
-            appTop.Add(rootWindow, status);
+            appTop.Add(rootWindow);
             
             consoleOutput.SetFocus();
             Instance = this;
