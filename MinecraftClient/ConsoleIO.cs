@@ -105,7 +105,7 @@ namespace MinecraftClient
                 return Console.ReadLine();
             }
             else {
-                throw new NotImplementedException();
+                return ConsoleHandler.WaitForInput();
             }
         }
 
