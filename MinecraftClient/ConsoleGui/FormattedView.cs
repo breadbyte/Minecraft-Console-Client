@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -10,8 +11,11 @@ using Attribute = Terminal.Gui.Attribute;
 namespace MinecraftClient.ConsoleGui {
     public class FormattedView : TextView {
         private static List<List<Rune>> formattedLines = new();
+        private static List<List<Rune>> currentLines = new();
+        private static List<char[]> formattingCache = new();
         private object lineLock = new();
         private static Regex FormatRegex = new Regex("(§[0-9a-fk-or])((?:[^§]|§[^0-9a-fk-or])*)", RegexOptions.Compiled);
+        private static ArrayPool<char> ArrayPool = ArrayPool<char>.Create();
 
         private Attribute black = Driver.MakeAttribute(Color.Gray, Color.Black);
         private Attribute dark_blue = Driver.MakeAttribute(Color.Blue, Color.Black);
@@ -31,129 +35,89 @@ namespace MinecraftClient.ConsoleGui {
         private Attribute white = Driver.MakeAttribute(Color.White, Color.Black);
 
         protected override void ColorNormal(List<Rune> line, int index) {
-            // Get the current string from our formatted list.
-            // line is the unformatted string, so we need to get the formatted ones from our list
-            // to determine the formatting we need.
+            var cLine = formattingCache[currentLines.FindIndex(x => x.SequenceEqual(line))];
 
-            lock (lineLock) {
-                var currentFormattedLine = formattedLines.FirstOrDefault(x => {
-                    var v = x.TrimFormatting();
-                    return v.SequenceEqual(line.ToArray()); //fixme alloc issue (sequenceEqual & toArray)
+            switch (cLine[index]) {
+                case '0': Driver.SetAttribute(black); break;
+                case '1': Driver.SetAttribute(dark_blue); break;
+                case '2': Driver.SetAttribute(dark_green); break;
+                case '3': Driver.SetAttribute(dark_aqua); break;
+                case '4': Driver.SetAttribute(dark_red); break;
+                case '5': Driver.SetAttribute(dark_purple); break;
+                case '6': Driver.SetAttribute(gold); break;
+                case '7': Driver.SetAttribute(gray); break;
+                case '8': Driver.SetAttribute(dark_gray); break;
+                case '9': Driver.SetAttribute(blue); break;
+                case 'a': Driver.SetAttribute(green); break;
+                case 'b': Driver.SetAttribute(aqua); break;
+                case 'c': Driver.SetAttribute(red); break;
+                case 'd': Driver.SetAttribute(light_purple); break;
+                case 'e': Driver.SetAttribute(yellow); break;
+                case 'f': Driver.SetAttribute(white); break;
+                case 'r': Driver.SetAttribute(white); break;
+                default:
+                    Driver.SetAttribute(white);
+                    break;
+            }
+        }
 
-                    // Throws InvalidOperation when formattedLines has desynced with the current lines shown.
-                    // Should never happen theoretically but the exception is here just in case so we fail fast.
-                }) ?? null;
-
-                if (currentFormattedLine == null)
-                    Debugger.Break();
-
+        private char[] Format(string formattedString) {
+            char[] arr = new char[formattedString.Length];
+            for (int index = 0; index < formattedString.Length; index++) {
                 // Need to sync `index` with `currentFormattedLine` index
                 // and then backwards read the current color.
-                var runestr = currentFormattedLine.ToRuneString();
+                var runestr = formattedString;
                 var formatIndex = index;
 
                 // How many § we have encountered. Determines the correct formatting to be used.
                 int matchIndex = 0;
 
                 for (int i = 0; i <= formatIndex; i++) {
-                    if (currentFormattedLine[i] == '§') {
+                    if (formattedString[i] == '§') {
                         // Trailing §
-                        if (formatIndex + 2 >= currentFormattedLine.Count) {
-                            formatIndex = currentFormattedLine.Count - 1;
+                        if (formatIndex + 2 >= formattedString.Length) {
+                            formatIndex = formattedString.Length - 1;
                             break;
                         }
 
                         // Are we actually a valid formatting character?
-                        if (((char) currentFormattedLine[i + 1]).IsValidFormattingChar()) {
+                        if (((char) formattedString[i + 1]).IsValidFormattingChar()) {
                             formatIndex += 2;
                             matchIndex++;
                         }
                     }
                 }
 
-
                 // We have desynced from the current index.
                 // Debug.Assert(line[index] == currentFormattedLine[formatIndex]);
 
                 var matches = FormatRegex.Matches(runestr);
-                if (matchIndex == 0 || matches.Count == 0)
-                    return;
+                if (matchIndex == 0 || matches.Count == 0) {
+                    arr[index] = 'r';
+                    continue;
+                }
 
                 switch (matches[matchIndex - 1].Groups[1].Value) {
-                    case "§0": ApplyFormatting(ColorType.ColorBlack); break;
-                    case "§1": ApplyFormatting(ColorType.ColorDarkBlue); break;
-                    case "§2": ApplyFormatting(ColorType.ColorDarkGreen); break;
-                    case "§3": ApplyFormatting(ColorType.ColorDarkAqua); break;
-                    case "§4": ApplyFormatting(ColorType.ColorDarkRed); break;
-                    case "§5": ApplyFormatting(ColorType.ColorDarkPurple); break;
-                    case "§6": ApplyFormatting(ColorType.ColorGold); break;
-                    case "§7": ApplyFormatting(ColorType.ColorGray); break;
-                    case "§8": ApplyFormatting(ColorType.ColorDarkGray); break;
-                    case "§9": ApplyFormatting(ColorType.ColorBlue); break;
-                    case "§a": ApplyFormatting(ColorType.ColorGreen); break;
-                    case "§b": ApplyFormatting(ColorType.ColorAqua); break;
-                    case "§c": ApplyFormatting(ColorType.ColorRed); break;
-                    case "§d": ApplyFormatting(ColorType.ColorLightPurple); break;
-                    case "§e": ApplyFormatting(ColorType.ColorYellow); break;
-                    case "§f": ApplyFormatting(ColorType.ColorWhite); break;
-                    case "§r": ApplyFormatting(ColorType.ColorBlack); break;
+                    case "§0": arr[index] = '0'; break;
+                    case "§1": arr[index] = '1'; break;
+                    case "§2": arr[index] = '2'; break;
+                    case "§3": arr[index] = '3'; break;
+                    case "§4": arr[index] = '4'; break;
+                    case "§5": arr[index] = '5'; break;
+                    case "§6": arr[index] = '6'; break;
+                    case "§7": arr[index] = '7'; break;
+                    case "§8": arr[index] = '8'; break;
+                    case "§9": arr[index] = '9'; break;
+                    case "§a": arr[index] = 'a'; break;
+                    case "§b": arr[index] = 'b'; break;
+                    case "§c": arr[index] = 'c'; break;
+                    case "§d": arr[index] = 'd'; break;
+                    case "§e": arr[index] = 'e'; break;
+                    case "§f": arr[index] = 'f'; break;
+                    case "§r": arr[index] = 'r'; break;
                 }
             }
-
-            void ApplyFormatting(ColorType colorType) {
-                switch (colorType) {
-                    case ColorType.ColorBlack:
-                        Driver.SetAttribute(black);
-                        break;
-                    case ColorType.ColorDarkBlue:
-                        Driver.SetAttribute(dark_blue);
-                        break;
-                    case ColorType.ColorDarkGreen:
-                        Driver.SetAttribute(dark_green);
-                        break;
-                    case ColorType.ColorDarkAqua:
-                        Driver.SetAttribute(dark_aqua);
-                        break;
-                    case ColorType.ColorDarkRed:
-                        Driver.SetAttribute(dark_red);
-                        break;
-                    case ColorType.ColorDarkPurple:
-                        Driver.SetAttribute(dark_purple);
-                        break;
-                    case ColorType.ColorGold:
-                        Driver.SetAttribute(gold);
-                        break;
-                    case ColorType.ColorGray:
-                        Driver.SetAttribute(gray);
-                        break;
-                    case ColorType.ColorDarkGray:
-                        Driver.SetAttribute(dark_gray);
-                        break;
-                    case ColorType.ColorBlue:
-                        Driver.SetAttribute(blue);
-                        break;
-                    case ColorType.ColorGreen:
-                        Driver.SetAttribute(green);
-                        break;
-                    case ColorType.ColorAqua:
-                        Driver.SetAttribute(aqua);
-                        break;
-                    case ColorType.ColorRed:
-                        Driver.SetAttribute(red);
-                        break;
-                    case ColorType.ColorLightPurple:
-                        Driver.SetAttribute(light_purple);
-                        break;
-                    case ColorType.ColorYellow:
-                        Driver.SetAttribute(yellow);
-                        break;
-                    case ColorType.ColorWhite:
-                        Driver.SetAttribute(white);
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-            }
+            return arr;
         }
 
         public void WriteToConsole(string str, bool autoScroll) {
@@ -165,6 +129,8 @@ namespace MinecraftClient.ConsoleGui {
 
             lock (lineLock) {
                 formattedLines.Add(rList);
+                formattingCache.Add(Format(str));
+                currentLines.Add(rList.TrimFormatting());
             }
             
             Application.MainLoop.Invoke(() => {
@@ -172,25 +138,6 @@ namespace MinecraftClient.ConsoleGui {
                 if (autoScroll)
                     MoveEnd();
             });
-        }
-
-        enum ColorType {
-            ColorBlack,
-            ColorDarkBlue,
-            ColorDarkGreen,
-            ColorDarkAqua,
-            ColorDarkRed,
-            ColorDarkPurple,
-            ColorGold,
-            ColorGray,
-            ColorDarkGray,
-            ColorBlue,
-            ColorGreen,
-            ColorAqua,
-            ColorRed,
-            ColorLightPurple,
-            ColorYellow,
-            ColorWhite
         }
     }
 }
