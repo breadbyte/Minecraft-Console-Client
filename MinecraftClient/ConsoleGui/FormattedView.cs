@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -10,12 +11,13 @@ using Attribute = Terminal.Gui.Attribute;
 
 namespace MinecraftClient.ConsoleGui {
     public class FormattedView : TextView {
-        private static List<List<Rune>> formattedLines = new();
-        private static List<List<Rune>> currentLines = new();
+        private static List<Rune[]> formattedLines = new();
+        private static List<Rune[]> currentLines = new();
         private static List<char[]> formattingCache = new();
         private object lineLock = new();
         private static Regex FormatRegex = new Regex("(§[0-9a-fk-or])((?:[^§]|§[^0-9a-fk-or])*)", RegexOptions.Compiled);
         private static ArrayPool<char> ArrayPool = ArrayPool<char>.Create();
+        FastRuneCompare _fastRuneCompare = new FastRuneCompare();
 
         private Attribute black = Driver.MakeAttribute(Color.Gray, Color.Black);
         private Attribute dark_blue = Driver.MakeAttribute(Color.Blue, Color.Black);
@@ -35,9 +37,21 @@ namespace MinecraftClient.ConsoleGui {
         private Attribute white = Driver.MakeAttribute(Color.White, Color.Black);
 
         protected override void ColorNormal(List<Rune> line, int index) {
-            var cLine = formattingCache[currentLines.FindIndex(x => x.SequenceEqual(line))];
-
-            switch (cLine[index]) {
+            char[] cLine = null!;
+            lock (lineLock)
+                foreach (var runearr in currentLines) {
+                    if (line.Count == runearr.Length) {
+                        foreach (var rune in runearr) {
+                            if (runearr.SequenceEqual(line, _fastRuneCompare)) {
+                                cLine = formattingCache[currentLines.IndexOf(runearr)];
+                                break;
+                            }
+                        }
+                    }
+                    continue;
+                }
+            
+            switch (cLine![index]) {
                 case '0': Driver.SetAttribute(black); break;
                 case '1': Driver.SetAttribute(dark_blue); break;
                 case '2': Driver.SetAttribute(dark_green); break;
@@ -128,9 +142,9 @@ namespace MinecraftClient.ConsoleGui {
             }
 
             lock (lineLock) {
-                formattedLines.Add(rList);
+                formattedLines.Add(rList.ToArray());
                 formattingCache.Add(Format(str));
-                currentLines.Add(rList.TrimFormatting());
+                currentLines.Add(rList.TrimFormatting().ToArray());
             }
             
             Application.MainLoop.Invoke(() => {
@@ -138,6 +152,16 @@ namespace MinecraftClient.ConsoleGui {
                 if (autoScroll)
                     MoveEnd();
             });
+        }
+    }
+
+    class FastRuneCompare : IEqualityComparer<Rune> {
+        public bool Equals(Rune x, Rune y) {
+            return x.GetHashCode() == y.GetHashCode();
+        }
+
+        public int GetHashCode(Rune obj) {
+            return obj.GetHashCode();
         }
     }
 }
