@@ -64,9 +64,10 @@ namespace MinecraftClient.ConsoleGui {
                             textBox.Text = "";
                         break;
                     case Key.Tab:
-                        // todo tab handler
-                        textBox.Text += "TAB";
-                        textBox.CursorPosition = textBox.Text.Length;
+                        if (textBox.CursorPosition == 0 || textBox.Text.Length == 0)
+                            break;
+                        
+                        ConsoleIO.DoAutoComplete(textBox.Text.ToString().Substring(0, textBox.CursorPosition));
                         break;
                 }
 

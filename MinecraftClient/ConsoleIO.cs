@@ -20,6 +20,8 @@ namespace MinecraftClient
         private static LinkedList<string> previous = new LinkedList<string>();
         private static string buffer = "";
         private static string buffer2 = "";
+        private static StringBuilder autocompleteBuilder = new StringBuilder();
+
 
         /// <summary>
         /// Set an auto-completion engine for TAB autocompletion.
@@ -27,6 +29,16 @@ namespace MinecraftClient
         /// <param name="engine">Engine implementing the IAutoComplete interface</param>
         public static void SetAutoCompleteEngine(IAutoComplete engine) {
             autocomplete_engine = engine;
+        }
+        
+        internal static void DoAutoComplete(string buffer) {
+            if (autocomplete_engine == null)
+                return;
+
+            foreach (var result in autocomplete_engine.AutoComplete(buffer)) {
+                autocompleteBuilder.Append(result + " ");
+            }
+            autocompleteBuilder.Clear();
         }
 
         /// <summary>
