@@ -487,7 +487,6 @@ namespace MinecraftClient
                 client.Disconnect();
                 
                 ConsoleIO.WriteLineFormatted(Translations.Get("mcc.disconnected", (Settings.internalCmdChar == ' ' ? "" : "" + Settings.internalCmdChar)));
-                ConsoleIO.WriteLine("Press Enter to continue...");
                 while (offlineMode) {
                     string command = " ";
 
