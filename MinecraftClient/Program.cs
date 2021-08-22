@@ -88,6 +88,8 @@ namespace MinecraftClient
                 ConsoleHandler cHandler = new ConsoleHandler();
                 Application.Top.Initialized += StartMCC;
                 Application.Run();
+                Application.Shutdown();
+                Environment.Exit(0);
             }
         }
 
@@ -433,14 +435,16 @@ namespace MinecraftClient
         /// <summary>
         /// Disconnect the current client from the server and exit the app
         /// </summary>
-        public static void Exit(int exitcode = 0)
-        {
-            new Thread(new ThreadStart(delegate
-            {
-                if (client != null) { client.Disconnect(); }
-                if (Settings.playerHeadAsIcon) { ConsoleIcon.revertToMCCIcon(); }
-                Environment.Exit(exitcode);
-            })).Start();
+        public static void Exit(int exitcode = 0) {
+            if (client != null) {
+                client.Disconnect();
+            }
+
+            if (Settings.playerHeadAsIcon) {
+                ConsoleIcon.revertToMCCIcon();
+            }
+
+            Application.RequestStop();
         }
 
         /// <summary>
