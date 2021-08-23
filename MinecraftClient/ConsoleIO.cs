@@ -124,6 +124,11 @@ namespace MinecraftClient
                 text = text.Replace('\n', ' ');
             WriteLineFormatted(LogPrefix + text);
         }
+
+        public static void SetTitle(string title) {
+            Console.Title = title;
+            ConsoleHandler.Instance?.SetTitle(title);
+        }
     }
 
     /// <summary>

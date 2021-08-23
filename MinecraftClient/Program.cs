@@ -136,7 +136,7 @@ namespace MinecraftClient
 
             if (Settings.ConsoleTitle != "") {
                 Settings.Username = "New Window";
-                ConsoleHandler.Instance!.SetTitle(Settings.ExpandVars(Settings.ConsoleTitle));
+               ConsoleIO.SetTitle(Settings.ExpandVars(Settings.ConsoleTitle));
             }
 
             //Test line to troubleshoot invisible colors
@@ -254,7 +254,7 @@ namespace MinecraftClient
                 bool isRealms = false;
 
                 if (Settings.ConsoleTitle != "")
-                    Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
+                    ConsoleIO.SetTitle(Settings.ExpandVars(Settings.ConsoleTitle));
 
                 if (Settings.playerHeadAsIcon)
                     ConsoleIcon.setPlayerIconAsync(Settings.Username);
@@ -383,9 +383,7 @@ namespace MinecraftClient
                         //Update console title
                         if (Settings.ConsoleTitle != "")
                             if (ConsoleIO.BasicIO)
-                                Console.Title = Settings.ExpandVars(Settings.ConsoleTitle);
-                            else 
-                                ConsoleHandler.Instance!.SetTitle(Settings.ExpandVars(Settings.ConsoleTitle));
+                                ConsoleIO.SetTitle(Settings.ExpandVars(Settings.ConsoleTitle));
                     }
                     catch (NotSupportedException) { HandleFailure(Translations.Get("error.unsupported"), true); }
                 }
