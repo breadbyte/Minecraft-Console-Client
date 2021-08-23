@@ -99,11 +99,11 @@ namespace MinecraftClient
 
             if (BasicIO) {
                 if (displayTimestamp) {
-                    Console.Write($"{DateTime.Now.Hour:00}:{DateTime.Now.Minute:00}:{DateTime.Now.Second:00}");
+                    Console.Write($"{DateTime.Now.Hour:00}:{DateTime.Now.Minute:00}:{DateTime.Now.Second:00} ");
                 }
 
                 if (BasicIO_NoColor) {
-                    str = ChatBot.GetVerbatim(str);
+                    Console.WriteLine(ChatBot.GetVerbatim(str));
                 }
                 else {
                     Console.WriteLine(str);

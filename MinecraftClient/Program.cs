@@ -91,6 +91,9 @@ namespace MinecraftClient
                 Application.Shutdown();
                 Environment.Exit(0);
             }
+            else {
+                InitializeClient();
+            }
         }
 
         public static void StartMCC(object? sender, EventArgs eventArgs) {
@@ -124,7 +127,7 @@ namespace MinecraftClient
                 }
             }
             
-            ConsoleHandler.Instance!.WriteLine($"Console Client for MC {MCLowestVersion} to {MCHighestVersion} - v{Version} - By ORelio & Contributors");
+            ConsoleIO.WriteLine($"Console Client for MC {MCLowestVersion} to {MCHighestVersion} - v{Version} - By ORelio & Contributors");
 
             //Build information to facilitate processing of bug reports
             if (BuildInfo != null) {
@@ -185,12 +188,13 @@ namespace MinecraftClient
                 if (useBrowser)
                     ConsoleIO.WriteLine("Press Enter to skip session cache checking and continue sign-in with browser");
                 if (ConsoleIO.BasicIO) {
-                    Console.WriteLine(Translations.Get("mcc.login_basic_io") + '\n');
+                    Console.WriteLine(Translations.Get("mcc.login_basic_io"));
                     Settings.Login = Console.ReadLine();
                 }
-
-                ConsoleIO.WriteLine(Translations.Get("mcc.login"));
-                Settings.Login = ConsoleHandler.WaitForInput();
+                else {
+                    ConsoleIO.WriteLine(Translations.Get("mcc.login"));
+                    Settings.Login = ConsoleHandler.WaitForInput();
+                }
             }
             if (Settings.Password == "" 
                 && (Settings.SessionCaching == CacheType.None || !SessionCache.Contains(Settings.Login.ToLower()))
