@@ -43,7 +43,7 @@ namespace MinecraftClient.ConsoleGui {
             if (runes.Count == 0)
                 return runes;
             
-            List<Rune> backingStore = new(runes); //fixme alloc issue
+            List<Rune> backingStore = new(runes);
             for (int i = 0; i < backingStore.Count; i++) {
                 switch (backingStore[i]) {
                     case '§':
