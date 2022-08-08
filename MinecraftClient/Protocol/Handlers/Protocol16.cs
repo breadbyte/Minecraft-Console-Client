@@ -7,6 +7,7 @@ using System.Threading;
 using MinecraftClient.Crypto;
 using MinecraftClient.Proxy;
 using System.Security.Cryptography;
+using MinecraftClient.Crypto.Streams;
 using MinecraftClient.Mapping;
 using MinecraftClient.Inventory;
 
@@ -24,7 +25,7 @@ namespace MinecraftClient.Protocol.Handlers
         private bool encrypted = false;
         private int protocolversion;
         private Tuple<Thread, CancellationTokenSource>? netRead = null;
-        Crypto.IAesStream s;
+        RegularAesStream s;
         TcpClient c;
 
         public Protocol16Handler(TcpClient Client, int ProtocolVersion, IMinecraftComHandler Handler)
