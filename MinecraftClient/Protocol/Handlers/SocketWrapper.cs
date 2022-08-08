@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net.Sockets;
 using MinecraftClient.Crypto;
+using MinecraftClient.Crypto.Streams;
 
 namespace MinecraftClient.Protocol.Handlers
 {
@@ -10,7 +11,7 @@ namespace MinecraftClient.Protocol.Handlers
     class SocketWrapper
     {
         TcpClient c;
-        IAesStream s;
+        RegularAesStream s;
         bool encrypted = false;
 
         /// <summary>

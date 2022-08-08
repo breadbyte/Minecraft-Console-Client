@@ -12,7 +12,7 @@ namespace MinecraftClient.Crypto.Streams
     /// This is the regular AesStream class used with the regular .NET framework from Microsoft.
     /// </summary>
 
-    public class RegularAesStream : Stream, IAesStream
+    public class RegularAesStream : Stream
     {
         CryptoStream enc;
         CryptoStream dec;
@@ -91,9 +91,9 @@ namespace MinecraftClient.Crypto.Streams
             enc.Write(buffer, offset, count);
         }
 
-        private RijndaelManaged GenerateAES(byte[] key)
+        private Aes GenerateAES(byte[] key)
         {
-            RijndaelManaged cipher = new RijndaelManaged();
+            var cipher = Aes.Create();
             cipher.Mode = CipherMode.CFB;
             cipher.Padding = PaddingMode.None;
             cipher.KeySize = 128;
