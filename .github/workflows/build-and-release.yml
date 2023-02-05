@@ -59,6 +59,7 @@ jobs:
     - name: Set Version Info
       run: |
         echo '' >> ${{ env.assembly-info }}
+        echo build-version-info=${{ env.date-dashed }}-${{ github.run_number }} >> $GITHUB_ENV
         echo "[assembly: AssemblyConfiguration(\"GitHub build ${{ github.run_number }}, built on ${{ env.date_dashed }} from commit ${{ env.commit }}\")]" >> ${{ env.assembly-info }}
 
     - name: Build Target
@@ -72,7 +73,7 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         mode: uploadReleaseAsset
         filePath: ${{ env.built-executable-path }}
-        assetName: ${{ env.PROJECT }}-${{ env.date_dashed }}-${{ matrix.target }}${{ (startsWith(matrix.target, 'win') && '.exe') || ' ' }}
+        assetName: ${{ env.PROJECT }}-${{ env.build-version-info }}-${{ matrix.target }}${{ (startsWith(matrix.target, 'win') && '.exe') || ' ' }}
         tag: ${{ format('{0}-{1}', env.date, github.run_number) }}
     
   fetch-translations:
