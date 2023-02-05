@@ -8,6 +8,7 @@ on:
   
 env:
   PROJECT: "MinecraftClient"
+  DOTNET_NOLOGO: true
   target-version: "net7.0"
   compile-flags: "--self-contained=true -c Release -p:UseAppHost=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None"
 
@@ -19,8 +20,7 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     steps:
       - name: dummy action
-        run: |
-          echo ENVTEST='dummy action' >> $GITHUB_ENV
+        run: "echo 'dummy action'"
     
   fetch-translations:
     strategy:
@@ -31,9 +31,17 @@ jobs:
     if: ${{ github.repository == 'MCCTeam/Minecraft-Console-Client' }}
     timeout-minutes: 15
   
-    steps:
+    steps:   
+    - name: Cache
+      uses: actions/cache@v3.2.4
+      id: cache-check
+      with:
+        path: ${{ github.workspace }}/*
+        key: 'translation-${{ github.sha }}'
+  
     - name: Download translations from crowdin
       uses: crowdin/github-action@v1.6.0
+      if: steps.cache-check.outputs.cache-hit != 'true'
       with:
         upload_sources: true
         upload_translations: false
@@ -48,21 +56,16 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
         CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_TOKEN }}
-    
-    - name: Cache
-      uses: actions/cache@v3.2.4
-      id: cache
-      with:
-        # A list of files, directories, and wildcard patterns to cache and restore
-        path: ${{ github.workspace }}/*
-        # An explicit key for restoring and saving the cache
-        key: 'translation-${{ env.build-version-info }}'
       
-  fetch-repo:
+  build:
     runs-on: ubuntu-latest
-    needs: determine-build
+    if: ${{ always() }}
+    needs: [determine-build, fetch-translations]
     timeout-minutes: 15
-  
+    strategy:
+      matrix:
+        target: [win-x86]
+
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -70,50 +73,18 @@ jobs:
         fetch-depth: 0
         submodules: 'true'
         
-    - name: Cache
-      uses: actions/cache@v3.2.4
-      id: cache
-      with:
-        # A list of files, directories, and wildcard patterns to cache and restore
-        path: ${{ github.workspace }}/*
-        # An explicit key for restoring and saving the cache
-        key: '${{ github.sha }}'
-    
-  build:
-    runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs: [determine-build, fetch-translations, fetch-repo]
-    timeout-minutes: 15
-    strategy:
-      matrix:
-        target: [win-x86]
-
-    steps:
-    - name: Restore Repository
-      uses: actions/cache/restore@v3
-      with:
-        path: ${{ github.workspace }}/*
-        key: ${{ github.sha }}
+    - name: Get Current Date
+      run: |
+        echo date=$(date +'%Y%m%d') >> $GITHUB_ENV
+        echo date_dashed=$(date -u +'%Y-%m-%d') >> $GITHUB_ENV
         
     - name: Restore Translations (if available)
       uses: actions/cache/restore@v3
       with:
         path: ${{ github.workspace }}/*
-        key: "translation-${{ env.build-version-info }}"
-        restore-keys: "translation-${{ env.ENVTEST }}"
-        
-    - name: Always Fail
-      # You may pin to the exact commit or the version.
-      # uses: cutenode/action-always-fail@a4c550da5463ba7eb224caf9cd2e02d4c82c1eb0
-      uses: cutenode/action-always-fail@v1.0.1
-    
-    - name: Get Version DateTime
-      id: date-version
-      uses: nanzm/get-time-action@v1.1
-      with:
-        timeZone: 0
-        format: 'YYYY-MM-DD'
-    
+        key: "translation-${{ github.sha }}"
+        restore-keys: "translation-"
+          
     - name: Setup Environment Variables (early)
       run: |
         echo project-path=${{ github.workspace }}/${{ env.PROJECT }} >> $GITHUB_ENV
@@ -130,23 +101,13 @@ jobs:
       run: |
         echo built-executable-path=${{ env.target-out-path }}${{ env.PROJECT }}${{ env.file-ext }} >> $GITHUB_ENV
 
-    - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v2.1.0
-
-    - name: VersionInfo
+    - name: Set Version Info
       run: |
         echo '' >> ${{ env.assembly-info }}
-        echo "[assembly: AssemblyConfiguration(\"GitHub build ${{ github.run_number }}, built on ${{ steps.date-version.outputs.time }} from commit ${{ env.commit }}\")]" >> ${{ env.assembly-info }}
+        echo "[assembly: AssemblyConfiguration(\"GitHub build ${{ github.run_number }}, built on ${{ env.date_dashed }} from commit ${{ env.commit }}\")]" >> ${{ env.assembly-info }}
 
     - name: Build Target
       run: dotnet publish ${{ env.project-path }}.sln -f ${{ env.target-version }} -r ${{ matrix.target }} ${{ env.compile-flags }}
-      
-    - name: Get Release DateTime
-      id: date-release
-      uses: nanzm/get-time-action@v1.1
-      with:
-        timeZone: 0
-        format: 'YYYYMMDD'
 
     - name: Target Publish Executable
       uses: tix-factory/release-manager@v1
@@ -155,4 +116,4 @@ jobs:
         mode: uploadReleaseAsset
         filePath: ${{ env.built-executable-path }}
         assetName: ${{ env.PROJECT }}-${{ env.commit }}-${{ matrix.target }}${{ (startsWith(matrix.target, 'win') && '.exe') || ' ' }}
-        tag: ${{ format('{0}-{1}', steps.date-release.outputs.time, github.run_number) }}
+        tag: ${{ format('{0}-{1}', env.date, github.run_number) }}
