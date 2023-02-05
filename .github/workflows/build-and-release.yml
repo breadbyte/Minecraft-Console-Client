@@ -12,21 +12,91 @@ env:
   compile-flags: "--self-contained=true -c Release -p:UseAppHost=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None"
 
 jobs:
-  Build:
+  determine-build:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
-    timeout-minutes: 15
     strategy:
-      matrix:
-        target: [win-x86, win-x64, win-arm, win-arm64, linux-x64, linux-arm, linux-arm64, osx-x64, osx-arm64]
+      fail-fast: true
+    if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
+    
+  fetch-translations:
+    strategy:
+      fail-fast: true
+    runs-on: ubuntu-latest
+    needs: determine-build
+    # Only works in MCCTeam repository, since it needs crowdin secrets.
+    if: ${{ github.repository == 'MCCTeam/Minecraft-Console-Client' }}
+    timeout-minutes: 15
+  
+    steps:
+    - name: Download translations from crowdin
+      uses: crowdin/github-action@v1.6.0
+      with:
+        upload_sources: true
+        upload_translations: false
+        download_translations: true
 
+        localization_branch_name: l10n_master
+        create_pull_request: false 
+        push_translations: false
+
+        base_path: ${{ github.workspace }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+        CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_TOKEN }}
+    
+    - name: Cache
+      uses: actions/cache@v3.2.4
+      id: cache
+      with:
+        # A list of files, directories, and wildcard patterns to cache and restore
+        path: ${{ github.workspace }}/*
+        # An explicit key for restoring and saving the cache
+        key: 'translation-${{ env.build-version-info }}'
+      
+  fetch-repo:
+    runs-on: ubuntu-latest
+    needs: determine-build
+    timeout-minutes: 15
+  
     steps:
     - name: Checkout
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
         submodules: 'true'
+        
+    - name: Cache
+      uses: actions/cache@v3.2.4
+      id: cache
+      with:
+        # A list of files, directories, and wildcard patterns to cache and restore
+        path: ${{ github.workspace }}/*
+        # An explicit key for restoring and saving the cache
+        key: '${{ github.sha }}'
+    
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [determine-build, fetch-translations, fetch-repo]
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        target: [win-x86]
 
+    steps:
+    - name: Restore Repository
+      uses: actions/cache/restore@v3
+      with:
+        path: ${{ github.workspace }}/*
+        key: ${{ github.sha }}
+        
+    - name: Restore Translations (if available)
+      uses: actions/cache/restore@v3
+      with:
+        path: ${{ github.workspace }}/*
+        key: "translation-${{ env.build-version-info }}"
+    
     - name: Setup Environment Variables (early)
       run: |
         echo project-path=${{ github.workspace }}/${{ env.PROJECT }} >> $GITHUB_ENV
