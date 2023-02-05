@@ -72,7 +72,7 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         mode: uploadReleaseAsset
         filePath: ${{ env.built-executable-path }}
-        assetName: ${{ env.PROJECT }}-${{ env.build-version-info }}-${{ matrix.target }}${{ (startsWith(matrix.target, 'win') && '.exe') || ' ' }}
+        assetName: ${{ env.PROJECT }}-${{ env.date_dashed }}-${{ matrix.target }}${{ (startsWith(matrix.target, 'win') && '.exe') || ' ' }}
         tag: ${{ format('{0}-{1}', env.date, github.run_number) }}
     
   fetch-translations:
