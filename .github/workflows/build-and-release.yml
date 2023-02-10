@@ -113,7 +113,7 @@ jobs:
   build-transition-version:
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [determine-build, fetch-translations]
+    needs: [determine-build, fetch-translations, build]
     timeout-minutes: 15
     strategy:
       fail-fast: true
