@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - invarant-builds
   workflow_dispatch:
   
 env:
