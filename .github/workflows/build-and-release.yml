@@ -94,14 +94,14 @@ jobs:
   
     - name: Checkout
       uses: actions/checkout@v3
-      if: steps.cache-check.outputs.cache-hit == 'false'
+      if: steps.cache-check.outputs.cache-hit != 'true'
       with:
         fetch-depth: 0
         submodules: 'true'
   
     - name: Download translations from crowdin
       uses: crowdin/github-action@v1.6.0
-      if: steps.cache-check.outputs.cache-hit == 'false'
+      if: steps.cache-check.outputs.cache-hit != 'true'
       with:
         upload_sources: true
         upload_translations: false
