@@ -79,7 +79,7 @@ jobs:
     timeout-minutes: 15
   
     steps:   
-    - name: Check Cache
+    - name: Check cache
       uses: actions/cache/restore@v3
       id: cache-check
       with:
@@ -113,7 +113,7 @@ jobs:
         CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
         CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_TOKEN }}
       
-    - name: save cache
+    - name: Save cache
       uses: actions/cache/save@v3
       if: steps.cache-check.outputs.cache-hit != 'true'
       with:
