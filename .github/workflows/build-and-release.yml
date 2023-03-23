@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        target: [win-x86, win-x64, win-arm, win-arm64, linux-x64, linux-arm, linux-arm64, osx-x64, osx-arm64]
+        target: [win-x64]
 
     steps:
     - name: Checkout
@@ -125,7 +125,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [win-x86, win-x64, linux-x64, linux-arm64, osx-x64]
+        target: [win-x64]
     
     steps:
     - name: Checkout
