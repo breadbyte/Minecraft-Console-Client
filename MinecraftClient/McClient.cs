@@ -2195,16 +2195,26 @@ namespace MinecraftClient
 
             if (entities.ContainsKey(entityID))
             {
-                if (type == InteractType.Interact)
+                switch (type)
                 {
-                    return handler.SendInteractEntity(entityID, (int)type, (int)hand);
-                }
-                else
-                {
-                    return handler.SendInteractEntity(entityID, (int)type);
+                    case InteractType.Interact:
+                        return handler.SendInteractEntity(entityID, (int)type, (int)hand);
+                    
+                    case InteractType.InteractAt:
+                        return handler.SendInteractEntity(
+                            EntityID: entityID, 
+                            type: (int)type, 
+                            X: (float)entities[entityID].Location.X, 
+                            Y: (float)entities[entityID].Location.Y, 
+                            Z: (float)entities[entityID].Location.Z, 
+                            hand: (int)hand);
+                    
+                    default:
+                        return handler.SendInteractEntity(entityID, (int)type);
                 }
             }
-            else return false;
+            
+            return false;
         }
 
         /// <summary>
@@ -2634,11 +2644,41 @@ namespace MinecraftClient
             List<string> links = new();
             string messageText;
 
+            // Used for 1.19+ to mark: system message, legal / illegal signature
+            string color = string.Empty;
+
             if (message.isSignedChat)
             {
                 if (!Config.Signature.ShowIllegalSignedChat && !message.isSystemChat && !(bool)message.isSignatureLegal!)
                     return;
                 messageText = ChatParser.ParseSignedChat(message, links);
+                
+                if (message.isSystemChat)
+                {
+                    if (Config.Signature.MarkSystemMessage)
+                        color = "§7▌§r";     // Background Gray
+                }
+                else
+                {
+                    if ((bool)message.isSignatureLegal!)
+                    {
+                        if (Config.Signature.ShowModifiedChat && message.unsignedContent != null)
+                        {
+                            if (Config.Signature.MarkModifiedMsg)
+                                color = "§6▌§r"; // Background Yellow
+                        }
+                        else
+                        {
+                            if (Config.Signature.MarkLegallySignedMsg)
+                                color = "§2▌§r"; // Background Green
+                        }
+                    }
+                    else
+                    {
+                        if (Config.Signature.MarkIllegallySignedMsg)
+                            color = "§4▌§r"; // Background Red
+                    }
+                }
             }
             else
             {
@@ -2648,7 +2688,7 @@ namespace MinecraftClient
                     messageText = message.content;
             }
 
-            Log.Chat(messageText);
+            Log.Chat(color + messageText);
 
             if (Config.Main.Advanced.ShowChatLinks)
                 foreach (string link in links)
