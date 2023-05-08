@@ -640,6 +640,7 @@ namespace MinecraftClient
             ParseResults<CmdResult> parse;
             try
             {
+                command = Config.AppVar.ExpandVars(command, localVars);
                 parse = dispatcher.Parse(command, result);
             }
             catch (Exception e)
