@@ -220,7 +220,7 @@ namespace MinecraftClient.Protocol
         /// <param name="location">Location</param>
         /// <param name="face">Block face</param>
         /// <param name="sequenceId">Sequence ID (use for synchronization)</param>
-        /// <returns>True if packet was succcessfully sent</returns>
+        /// <returns>True if packet was successfully sent</returns>
         bool SendPlayerDigging(int status, Location location, Direction face, int sequenceId);
 
         /// <summary>
@@ -231,8 +231,9 @@ namespace MinecraftClient.Protocol
         /// <param name="line2">New line 2</param>
         /// <param name="line3">New line 3</param>
         /// <param name="line4">New line 4</param>
-        /// <returns>True if packet was succcessfully sent</returns>
-        bool SendUpdateSign(Location location, string line1, string line2, string line3, string line4);
+        /// <param name="isFrontText">Are we editing the front or the back of the sign. 1.20 +</param>
+        /// <returns>True if packet was successfully sent</returns>
+        bool SendUpdateSign(Location location, string line1, string line2, string line3, string line4, bool isFrontText = true);
 
         /// <summary>
         /// Update command block
@@ -260,6 +261,12 @@ namespace MinecraftClient.Protocol
         /// </summary>
         /// <returns></returns>
         bool SendPlayerSession(PlayerKeyPair? playerKeyPair);
+        
+        /// <summary>
+        /// Send the server a command to type in the item name in the Anvil inventory when it's open.
+        /// </summary>
+        /// <param name="itemName">The new item name</param>
+        bool SendRenameItem(string itemName);
 
         /// <summary>
         /// Get net read thread (main thread) ID

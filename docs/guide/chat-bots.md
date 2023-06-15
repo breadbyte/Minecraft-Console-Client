@@ -50,6 +50,9 @@ redirectFrom:
 -   [Remote Control](#remote-control)
 -   [Replay Mod](#replay-mod)
 -   [Script Scheduler](#script-scheduler)
+-   [Telegram Bridge](#telegram-bridge)
+-   [Items Collector](#items-collector)
+-   [WebSocket](#websocket-chat-bot)
 
 ## Alerts
 
@@ -1264,6 +1267,12 @@ redirectFrom:
 
     </div>
 
+    <div class="custom-container warning"><p class="custom-container-title">Warning</p>
+
+    **If you want to use variables from this chat bot in scripts, currently that does not work. You will have to use a C# script in that case. We are working on getting this functionality back.**
+
+    </div>
+
     -   **Description:**
 
         This setting specifies the path to the file which contains the list of rules for detecting of keywords and responding on them.
@@ -1294,7 +1303,7 @@ redirectFrom:
 
     -   **Type:** `boolean`
 
-    -   **Default:** `true`
+    -   **Default:** `false`
 
 ## Chat Log
 
@@ -1391,7 +1400,7 @@ redirectFrom:
     Enable `Message Content Intent`, `Server Members Intent` and `Presence Intent`.
 
     ![Image](/images/guide/Discord_Reset_Token.png)
-    ![Image](/images/guide/Discord_Privileged_Intents.png)
+    ![Image](https://i.pics.rs/AAhyx.png)
 
     <div class="custom-container warning"><p class="custom-container-title">Warning</p>
 
@@ -2333,3 +2342,304 @@ redirectFrom:
         Trigger_On_Interval = { Enable = false, MinTime = 1.0, MaxTime = 10.0 }
         Action = "send /login pass"
     ```
+
+## Telegram Bridge
+
+-   **Description:**
+
+    This bot allows you to send and receive messages and commands via a Telegram Bot DM or to receive messages in a Telegram channel.
+
+    <div class="custom-container warning"><p class="custom-container-title">Warning</p>
+
+    **You can't send messages and commands from a group channel, you can only send them in the bot DM, but you can get the messages from the client in a group channel.**
+
+    </div>
+
+-   **Setup:**
+
+    1. First you need to create a Telegram bot and obtain an API key, to do so, go to Telegram and find @botfather
+    2. Click on `Start` button and read the bot reply, then type `/newbot`, the Botfather will guide you through the bot creation.
+    3. Once you create the bot, copy the **API key** that you have gotten, and put it into the `Token` field of `ChatBot.TelegramBridge` section (this section).
+    4. Then launch the client and go to Telegram, find your newly created bot by searching for it with its username, and open a DM with it.
+    5. Click on `Start` button and type and send the following command `.chatid` to obtain the chat id. 
+    6. Copy the chat id number (eg. `2627844670`) and paste it in the `ChannelId` field and add it to the `Authorized_Chat_Ids` field (in this section) (an id in "Authorized_Chat_Ids" field is a number/long, not a string!), then save the file.
+    Now you can use the bot using it's DM.
+
+    <div class="custom-container danger"><p class="custom-container-title">Danger</p>
+
+    **Do not share your API key with anyone else as it will give them the control over your bot. Save it securely.**
+
+    </div>
+
+    <div class="custom-container danger"><p class="custom-container-title">Danger</p>
+
+    **If you do not add the id of your chat DM with the bot to the "Authorized_Chat_Ids" field, ayone who finds your bot via search will be able to execute commands and send messages!**
+
+    </div>
+
+    <div class="custom-container danger"><p class="custom-container-title">Danger</p>
+
+    **An id pasted in to the "Authorized_Chat_Ids" should be a number/long, not a string!**
+
+    </div>
+
+-   **Settings:**
+
+    **Section:** **`ChatBot.TelegramBridge`**
+
+    #### `Enabled`
+
+    -   **Description:**
+
+        This setting specifies if the Telegram Bridge Chat Bot is enabled.
+
+    -   **Available values:** `true` and `false`.
+
+    -   **Type:** `boolean`
+
+    -   **Default:** `false`
+
+    #### `Token`
+
+    -   **Description:**
+
+        Your Telegram Bot token.
+
+    -   **Type:** `string`
+
+    -   **Default:** empty
+
+    #### `ChannelId`
+
+    -   **Description:**
+
+        An ID of a channel where you want to interact with the MCC using the bot.
+
+    -   **Type:** `string`
+
+    -   **Default:** empty
+
+    #### `Authorized_Chat_Ids`
+
+    -   **Description:**
+
+        A list of Chat IDs that are allowed to send messages and execute commands. 
+        To get an id of your chat DM with the bot use `.chatid` bot command in Telegram.
+
+    -   **Type:** `array of strings`
+
+    -   **Default:** empty
+
+    #### `Message_Send_Timeout`
+
+    -   **Description:**
+
+        How long to wait (in seconds) if a message can not be sent to Telegram before canceling the task (minimum 1 second).
+
+    -   **Type:** `integer`
+
+    -   **Default:** 3
+
+    **Message Formats**
+
+    Words wrapped with `{` and `}` are going to be replaced during the code execution, do not change them!
+    For example, `{message}` is going to be replace with an actual message, `{username}` will be replaced with an username, `{timestamp}` with the current time.
+    For Telegram message formatting, check the [following](https://mccteam.github.io/r/tg-fmt.html).
+
+    #### `PrivateMessageFormat`
+
+    -   **Description:**
+
+        A format that is used to display a private chat message on the minecraft server, in a Telegram channel.
+
+    -   **Type:** `string`
+
+    -   **Default:** `*(Private Message)* {username}: {message}`
+
+    #### `PublicMessageFormat`
+
+    -   **Description:**
+
+        A format that is used to display a public chat message on the minecraft server, in a Telegram channel.
+
+    -   **Type:** `string`
+
+    -   **Default:** `{username}: {message}`
+
+    #### `TeleportRequestMessageFormat`
+
+    -   **Description:**
+
+        A format that is used to display a teleport request on the minecraft server, in a Telegram channel.
+
+    -   **Type:** `string`
+
+    -   **Default:** `A new Teleport Request from **{username}**!`
+
+
+## Items Collector
+
+-   **Description:**
+
+    Collect items on the ground using this Chat Bot.
+
+-   **Settings:**
+
+    **Section:** **`ChatBot.ItemsCollector`**
+
+    #### `Enabled`
+
+    -   **Description:**
+  
+        This setting specifies if the Items Collector chat bot is enabled.
+
+    -   **Available values:** `true` and `false`.
+
+    -   **Type:** `boolean`
+
+    -   **Default:** `false`
+
+    #### `Collect_All_Item_Types`
+
+    -   **Description:**
+
+        Specifies if the bot will collect all items, regardless of their type. 
+        If you want to use the whitelisted item types, disable this by setting it to `false`.
+
+    -   **Available values:** `true` and `false`.
+
+    -   **Type:** `boolean`
+
+    -   **Default:** `false`
+
+    #### `Items_Whitelist`
+
+    -   **Description:**
+
+        In this list you can specify which items the bot will collect. 
+        To enable this, set the `Collect_All_Item_Types` to false. 
+
+    <div class="custom-container warning"><p class="custom-container-title">Note</p>
+
+    **This does not prevent the bot from accidentally picking up other items, it only goes to positions where it finds the whitelisted items**
+
+    </div>
+
+    -   **Available values:** [Item Type List](https://raw.githubusercontent.com/MCCTeam/Minecraft-Console-Client/master/MinecraftClient/Inventory/ItemType.cs)
+
+    -   **Type:** `array of strings with item names`
+
+    -   **Default:** `[ "Diamond", "NetheriteIngot" ]`
+
+    #### `Delay_Between_Tasks`
+
+    -   **Description:**
+
+        Delay in milliseconds between bot scanning items (Recommended: 300-500)
+
+    -   **Type:** `integer`
+
+    -   **Default:** `300`
+
+    #### `Collection_Radius`
+
+    -   **Description:**
+
+        The radius of blocks in which bot will look for items to collect.
+
+    -   **Type:** `double`
+
+    -   **Default:** `30.0`
+
+    #### `Always_Return_To_Start`
+
+    -   **Description:**
+
+        Specifies if the bot will return to it's starting position after there are no items to collect.
+
+    -   **Available values:** `true` and `false`.
+
+    -   **Type:** `boolean`
+
+    -   **Default:** `true`
+
+    #### `Prioritize_Clusters`
+
+    -   **Description:**
+
+        Specifies if the bot will go after clustered items instead for the closest ones.
+
+    -   **Available values:** `true` and `false`.
+
+    -   **Type:** `boolean`
+
+    -   **Default:** `true`
+
+
+## WebSocket Chat Bot
+
+-   **Description:**
+
+    This chat bot allows you to remotely execute commands on the MCC and make Chat Bots in other programming languages over Web Socket.
+
+    You can make your own library to do this, or use the reference implementation one which has been writen in TypeScript/JavaScript: [MCC.js](https://github.com/milutinke/MCC.js)
+
+    If you want to write your own library, you can follow this guide on the protocol specification and avaliable events and commands: [WebSocket Chat Bot Guide](websocket/README.md)
+
+-   **Settings:**
+
+    **Section:** **`ChatBot.WebSocketBot`**
+
+    #### `Enabled`
+
+    -   **Description:**
+  
+        This setting specifies if the Web Socket chat bot is enabled.
+
+    -   **Available values:** `true` and `false`.
+
+    -   **Type:** `boolean`
+
+    -   **Default:** `false`
+
+    #### `Ip`
+
+    -   **Description:**
+
+        The IP address that Websocket server will be bound to.
+
+    -   **Type:** `string`
+
+    -   **Default:** `127.0.0.1` (localhost)
+
+    #### `Port`
+
+    -   **Description:**
+
+        The Port that Websocket server will be bound to.
+
+    -   **Type:** `number`
+
+    -   **Default:** `8043`
+
+    #### `Password`
+
+    -   **Description:**
+
+        A password that will be used to authenticate on thw Websocket server 
+        
+        **It is recommended to change the default password and to set a strong one**
+
+    -   **Type:** `string`
+
+    -   **Default:** `wspass12345`
+
+    #### `DebugMode`
+
+    -   **Description:**
+
+        This setting is for developers who are developing a library that uses this chat bot to remotely execute procedures/commands/functions.
+
+    -   **Type:** `boolean`
+
+    -   **Default:** `false`

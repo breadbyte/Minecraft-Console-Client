@@ -9,6 +9,7 @@ using Brigadier.NET.Exceptions;
 using MinecraftClient.ChatBots;
 using MinecraftClient.CommandHandler;
 using MinecraftClient.CommandHandler.Patch;
+using MinecraftClient.Commands;
 using MinecraftClient.Inventory;
 using MinecraftClient.Logger;
 using MinecraftClient.Mapping;
@@ -97,6 +98,11 @@ namespace MinecraftClient
         private int playerLevel;
         private int playerTotalExperience;
         private byte CurrentSlot = 0;
+        
+        // Sneaking
+        public bool IsSneaking { get; set; } = false;
+        private bool isUnderSlab = false;
+        private DateTime nextSneakingUpdate = DateTime.Now;
 
         // Entity handling
         private readonly Dictionary<int, Entity> entities = new();
@@ -144,7 +150,9 @@ namespace MinecraftClient
         Tuple<Thread, CancellationTokenSource>? timeoutdetector = null;
 
         public ILogger Log;
-
+        
+        private static IMinecraftComHandler? instance;
+        public static IMinecraftComHandler? Instance => instance;
         /// <summary>
         /// Starts the main chat client, wich will login to the server using the MinecraftCom class.
         /// </summary>
@@ -157,6 +165,8 @@ namespace MinecraftClient
         public McClient(SessionToken session, PlayerKeyPair? playerKeyPair, string server_ip, ushort port, int protocolversion, ForgeInfo? forgeInfo)
         {
             CmdResult.currentHandler = this;
+            instance = this;
+            
             terrainAndMovementsEnabled = Config.Main.Advanced.TerrainAndMovements;
             inventoryHandlingEnabled = Config.Main.Advanced.InventoryHandling;
             entityHandlingEnabled = Config.Main.Advanced.EntityHandling;
@@ -286,6 +296,8 @@ namespace MinecraftClient
             if (Config.ChatBot.ReplayCapture.Enabled && reload) { BotLoad(new ReplayCapture()); }
             if (Config.ChatBot.ScriptScheduler.Enabled) { BotLoad(new ScriptScheduler()); }
             if (Config.ChatBot.TelegramBridge.Enabled) { BotLoad(new TelegramBridge()); }
+            if (Config.ChatBot.ItemsCollector.Enabled) { BotLoad(new ItemsCollector()); }
+            if (Config.ChatBot.WebSocketBot.Enabled) { BotLoad(new WebSocketBot()); }
             //Add your ChatBot here by uncommenting and adapting
             //BotLoad(new ChatBots.YourBot());
         }
@@ -326,6 +338,25 @@ namespace MinecraftClient
                     else
                         throw; //ThreadAbortException should not be caught
                 }
+            }
+
+            if (nextSneakingUpdate < DateTime.Now)
+            {
+                if (world.GetBlock(new Location(location.X, location.Y + 1, location.Z)).IsTopSlab(protocolversion) && !IsSneaking)
+                {
+                    isUnderSlab = true;
+                    SendEntityAction(EntityActionType.StartSneaking);
+                }
+                else
+                {
+                    if (isUnderSlab && !IsSneaking)
+                    {
+                        isUnderSlab = false;
+                        SendEntityAction(EntityActionType.StopSneaking);
+                    }
+                }
+
+                nextSneakingUpdate = DateTime.Now.AddMilliseconds(300);
             }
 
             lock (chatQueue)
@@ -2361,6 +2392,21 @@ namespace MinecraftClient
                 return false;
             }
         }
+        
+        /// <summary>
+        /// Send the server a command to type in the item name in the Anvil inventory when it's open.
+        /// </summary>
+        /// <param name="itemName">The new item name</param>
+        public bool SendRenameItem(string itemName)
+        {
+            if (inventories.Count == 0)
+                return false;
+
+            if (inventories.Values.ToList().Last().Type != ContainerType.Anvil)
+                return false;
+            
+            return handler.SendRenameItem(itemName);
+        }
         #endregion
 
         #region Event handlers: An event occurs on the Server
@@ -3377,7 +3423,9 @@ namespace MinecraftClient
             {
                 Entity entity = entities[entityID];
                 entity.Metadata = metadata;
-                if (entity.Type.ContainsItem() && metadata.TryGetValue(7, out object? itemObj) && itemObj != null && itemObj.GetType() == typeof(Item))
+                int itemEntityMetadataFieldIndex = protocolversion < Protocol18Handler.MC_1_17_Version ? 7 : 8;
+                
+                if (entity.Type.ContainsItem() && metadata.TryGetValue(itemEntityMetadataFieldIndex, out object? itemObj) && itemObj != null && itemObj.GetType() == typeof(Item))
                 {
                     Item item = (Item)itemObj;
                     if (item == null)
