@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -74,6 +75,11 @@ namespace MinecraftClient
                     options.EnableTracing = true;
                     options.SendDefaultPii = false;
                 });
+                
+                AppDomain.CurrentDomain.UnhandledException += (sender, eventArgs) => 
+                {
+                    SentrySdk.CaptureException((Exception)eventArgs.ExceptionObject);
+                };
             }
 
             Task.Run(() =>
@@ -404,6 +410,7 @@ namespace MinecraftClient
             }
 
             startupargs = args;
+            Debug.WriteLine("Starting Client");
             InitializeClient();
         }
 
@@ -425,6 +432,7 @@ namespace MinecraftClient
         /// </summary>
         private static void InitializeClient()
         {
+            Debug.WriteLine("Initializing Client");
             // Ensure that we use the provided Minecraft version if we can't connect automatically.
             //
             // useMcVersionOnce is set to true on HandleFailure()
@@ -492,6 +500,7 @@ namespace MinecraftClient
 
             if (result == ProtocolHandler.LoginResult.Success)
             {
+                Debug.WriteLine("Login Success");
                 InternalConfig.Username = session.PlayerName;
                 bool isRealms = false;
 
@@ -640,6 +649,7 @@ namespace MinecraftClient
                 //Proceed to server login
                 if (protocolversion != 0)
                 {
+                    Debug.WriteLine("Beginning to connect to server");
                     try
                     {
                         //Start the main TCP client

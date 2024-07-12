@@ -27,6 +27,7 @@ using MinecraftClient.Scripting;
 using Sentry;
 using static MinecraftClient.Settings;
 using static MinecraftClient.Settings.MainConfigHelper.MainConfig.GeneralConfig;
+using Debug = System.Diagnostics.Debug;
 
 namespace MinecraftClient.Protocol.Handlers
 {
@@ -371,10 +372,18 @@ namespace MinecraftClient.Protocol.Handlers
         /// <returns>TRUE if the packet was processed, FALSE if ignored or unknown</returns>
         internal bool HandlePacket(int packetId, Queue<byte> packetData)
         {
+            Debug.WriteLine($"Received packet {packetPalette.GetIncomingTypeById(packetId)} ({packetId}) with size {packetData.Count} in state {currentState}");
             // This copy is necessary because by the time we get to the catch block,
             // the packetData queue will have been processed and the data will be lost
             var _copy = packetData.ToArray();
-
+            
+            // Block massive packets from spamming our output
+            var blacklistPackets = new int[] { 108, 17, 1, 37, 111, 5, 8 };
+            if (!blacklistPackets.Contains(packetId))
+                Debug.WriteLine($"{Convert.ToHexString(_copy)}");
+            else
+                Debug.WriteLine("Packet data is too large to display");
+            
             try
             {
                 switch (currentState)
@@ -2776,6 +2785,9 @@ namespace MinecraftClient.Protocol.Handlers
         /// <returns>True if login successful</returns>
         public bool Login(PlayerKeyPair? playerKeyPair, SessionToken session)
         {
+            Debug.WriteLine("Login");
+            Debug.WriteLine("Handshaking");
+            
             // 1. Send the handshake packet
             SendPacket(0x00, dataTypes.ConcatBytes(
                     // Protocol Version
@@ -2791,6 +2803,7 @@ namespace MinecraftClient.Protocol.Handlers
                     DataTypes.GetVarInt(2)) // 2 is for the Login state
             );
 
+            Debug.WriteLine("Login Start");
             // 2. Send the Login Start packet
             List<byte> fullLoginPacket = new();
             fullLoginPacket.AddRange(dataTypes.GetString(handler.GetUsername())); // Username
@@ -2843,12 +2856,14 @@ namespace MinecraftClient.Protocol.Handlers
                     break;
             }
 
+            Debug.WriteLine("Login Start Packet");
             SendPacket(0x00, fullLoginPacket);
 
             // 3. Encryption Request - 9. Login Acknowledged
             while (true)
             {
                 var (packetId, packetData) = ReadNextPacket();
+                Debug.WriteLine($"Packet ID: {packetId}");
 
                 switch (packetId)
                 {

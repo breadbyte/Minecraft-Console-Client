@@ -23,6 +23,7 @@ using MinecraftClient.Proxy;
 using MinecraftClient.Scripting;
 using Sentry;
 using static MinecraftClient.Settings;
+using sdd = System.Diagnostics.Debug;
 
 namespace MinecraftClient
 {
@@ -166,6 +167,7 @@ namespace MinecraftClient
         /// <param name="forgeInfo">ForgeInfo item stating that Forge is enabled</param>
         public McClient(SessionToken session, PlayerKeyPair? playerKeyPair, string server_ip, ushort port, int protocolversion, ForgeInfo? forgeInfo)
         {
+            sdd.WriteLine("Client starting!");
             CmdResult.currentHandler = this;
             instance = this;
             
@@ -227,6 +229,7 @@ namespace MinecraftClient
 
             try
             {
+                sdd.WriteLine("TCP Client Creating");
                 client = ProxyHandler.NewTcpClient(host, port);
                 client.ReceiveBufferSize = 1024 * 1024;
                 client.ReceiveTimeout = Config.Main.Advanced.TcpTimeout * 1000; // Default: 30 seconds
