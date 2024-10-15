@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace MinecraftClient.Mapping
@@ -89,7 +90,15 @@ namespace MinecraftClient.Mapping
         /// <param name="nbt">The dimension type (NBT Tag Compound)</param>
         public static void SetDimension(string name)
         {
-            curDimension = dimensionList[name]; // Should not fail
+            try
+            {
+                curDimension = dimensionList[name]; // Should not fail
+            }
+            catch (KeyNotFoundException)
+            {
+                // For newer versions, assume that we are dealing with the default namespace
+                curDimension = dimensionList["minecraft:" + name];
+            }
         }
 
 
