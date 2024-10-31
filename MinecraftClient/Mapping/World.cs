@@ -60,6 +60,22 @@ namespace MinecraftClient.Mapping
         /// <param name="registryCodec">Registry Codec nbt data</param>
         public static void StoreDimensionList(Dictionary<string, object> registryCodec)
         {
+            
+            if (!registryCodec.ContainsKey("minecraft:dimension_type")) {
+                
+                // If not, then we force the registry to be in the correct format
+                if (registryCodec.ContainsKey("dimension_type")) {
+                    
+                    foreach (var key in registryCodec.Keys.ToArray()) {
+                        // Skip entries with a namespace already
+                        if (key.Contains(':', StringComparison.OrdinalIgnoreCase)) continue;
+                        // Assume all other entries are in the minecraft namespace
+                        registryCodec["minecraft:" + key] = registryCodec[key];
+                        registryCodec.Remove(key);
+                    }
+                }
+            }
+            
             var dimensionListNbt = (object[])(((Dictionary<string, object>)registryCodec["minecraft:dimension_type"])["value"]);
             foreach (var (dimensionName, dimensionType) in from Dictionary<string, object> dimensionNbt in dimensionListNbt
                                                            let dimensionName = (string)dimensionNbt["name"]
