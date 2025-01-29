@@ -153,7 +153,7 @@ namespace MinecraftClient.Protocol
             int[] suppoertedVersionsProtocol18 =
             {
                 4, 5, 47, 107, 108, 109, 110, 210, 315, 316, 335, 338, 340, 393, 401, 404, 477, 480, 485, 490, 498, 573,
-                575, 578, 735, 736, 751, 753, 754, 755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765
+                575, 578, 735, 736, 751, 753, 754, 755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765, 766, 767
             };
 
             if (Array.IndexOf(suppoertedVersionsProtocol18, protocolVersion) > -1)
@@ -345,6 +345,12 @@ namespace MinecraftClient.Protocol
                     case "1.20.3":
                     case "1.20.4":
                         return 765;
+                    case "1.20.5":
+                    case "1.20.6":
+                        return 766;
+                    case "1.21":
+                    case "1.21.1":
+                        return 767;
                     default:
                         return 0;
                 }
@@ -424,6 +430,8 @@ namespace MinecraftClient.Protocol
                 763 => "1.20",
                 764 => "1.20.2",
                 765 => "1.20.4",
+                766 => "1.20.6",
+                767 => "1.21",
                 _ => "0.0"
             };
         }
